@@ -52,7 +52,7 @@ include_directories(
     #${EIGEN3_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
-    ${MLK_INCLUDE_DIRS}
+    ${MKL_INCLUDE_DIR}
     ${GTSAM_INCLUDE_DIR}
     ${catkin_INCLUDE_DIRS}
 )
