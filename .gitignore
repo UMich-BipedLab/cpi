@@ -1,6 +1,7 @@
 .idea
 data
 build
+devel
 Build
 *.*~
 cmake-build-debug
