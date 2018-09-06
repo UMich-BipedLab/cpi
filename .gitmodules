@@ -1,0 +1,3 @@
+[submodule "catkin_ws/src/gtsam_backend"]
+	path = catkin_ws/src/gtsam_backend
+	url = git@github.com:UMich-BipedLab/gtsam_backend.git
