@@ -14,6 +14,7 @@ find_package(PCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system filesystem thread date_time)
 find_package(GTSAM REQUIRED) # source: https://bitbucket.org/gtborg/gtsam/
 find_package(MKL REQUIRED) # intel MKL library
+find_package(TBB REQUIRED)
 
 # Describe catkin project
 catkin_package(
@@ -53,6 +54,7 @@ include_directories(
     ${Boost_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${MKL_INCLUDE_DIR}
+    ${TBB_INCLUDE_DIRS}
     ${GTSAM_INCLUDE_DIR}
     ${catkin_INCLUDE_DIRS}
 )
@@ -63,6 +65,7 @@ list(APPEND thirdparty_libraries
     ${OpenCV_LIBRARIES}
     ${PCL_LIBRARIES}
     ${MKL_LIBRARIES}
+    ${TBB_LIBRARIES}
     gtsam
     gtsam_unstable
     ${catkin_LIBRARIES}
