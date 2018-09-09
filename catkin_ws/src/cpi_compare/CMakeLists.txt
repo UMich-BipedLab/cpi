@@ -4,15 +4,16 @@ cmake_minimum_required(VERSION 2.8.8)
 project(cpi_compare)
 
 # Include our cmake files
-SET(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../../cmake/)
+#SET(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../../cmake/)
+LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../../cmake)
 
 # Find catkin (the ROS build system)
 find_package(catkin REQUIRED COMPONENTS roscpp tf pcl_ros std_msgs geometry_msgs sensor_msgs nav_msgs visualization_msgs pcl_conversions cpi_comm)
 
 # Include libraries
+find_package(GTSAM REQUIRED) # source: https://bitbucket.org/gtborg/gtsam/
 find_package(PCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system filesystem thread date_time)
-find_package(GTSAM REQUIRED) # source: https://bitbucket.org/gtborg/gtsam/
 find_package(MKL REQUIRED) # intel MKL library
 find_package(TBB REQUIRED)
 
