@@ -575,7 +575,7 @@ void publish_GTSAMstate(double timestamp, gtsam::Pose3& state, Eigen::Matrix<dou
 
     // Debug print current position
     ROS_INFO("[STATE]: q = %.4f, %.4f, %.4f, %.4f | v = %.2f, %.2f, %.2f | p = %.2f, %.2f, %.2f",
-             pose.pose.pose.orientation.x, pose.pose.pose.orientation.y, pose.pose.pose.orientation.z, pose.pose.pose.orientation.w, 0.0, 0.0, 0.0, 0.0,
+             pose.pose.pose.orientation.x, pose.pose.pose.orientation.y, pose.pose.pose.orientation.z, pose.pose.pose.orientation.w, 0.0, 0.0, 0.0,
              pose.pose.pose.position.x, pose.pose.pose.position.y, pose.pose.pose.position.z);
 
 }
