@@ -50,6 +50,7 @@
 #include "sim/SimulationLoader.h"
 #include "utils/Config.h"
 
+#include "common/gtsam_ros_utils.h"
 
 // Functions
 void setup_config(ros::NodeHandle& nh, Config* config);
@@ -59,6 +60,8 @@ void handle_measurement_imu(sensor_msgs::Imu::Ptr msg);
 void handle_measurement_uv(cpi_comm::CameraMeasurement::Ptr msg);
 void publish_JPLstate(double timestamp, JPLNavState& state, Eigen::Matrix<double, 6, 6>& covariance,
                       ros::Publisher& pubPath, ros::Publisher& pubPoseIMU, vector<geometry_msgs::PoseStamped>& poses_est);
+void publish_GTSAMstate(double timestamp, gtsam::Pose3& state, Eigen::Matrix<double, 6, 6>& covariance,
+                      ros::Publisher& pubPath, ros::Publisher& pubPoseIMU, vector<geometry_msgs::PoseStamped>& poses_est);
 void publish_FeatureCloud(double timestamp);
 
 
@@ -66,12 +69,15 @@ void publish_FeatureCloud(double timestamp);
 ros::Publisher pubFeatureCloudsv1;
 ros::Publisher pubFeatureCloudsv2;
 ros::Publisher pubFeatureCloudsFORSTER;
+ros::Publisher pubFeatureCloudsFORSTER2;
 ros::Publisher pubPathMODEL1;
 ros::Publisher pubPathMODEL2;
 ros::Publisher pubPathFORSTER;
+ros::Publisher pubPathFORSTER2;
 ros::Publisher pubPoseIMUMODEL1;
 ros::Publisher pubPoseIMUMODEL2;
 ros::Publisher pubPoseIMUFORSTER;
+ros::Publisher pubPoseIMUFORSTER2;
 ros::Subscriber subUVMeas;
 ros::Subscriber subIMUMeas;
 ros::Subscriber subPOSETrue;
@@ -86,6 +92,7 @@ unsigned int poses_seq = 0;
 vector<geometry_msgs::PoseStamped> poses_estMODEL1;
 vector<geometry_msgs::PoseStamped> poses_estMODEL2;
 vector<geometry_msgs::PoseStamped> poses_estFORSTER;
+vector<geometry_msgs::PoseStamped> poses_estFORSTER2;
 
 
 int main(int argc, char** argv)
@@ -124,12 +131,15 @@ int main(int argc, char** argv)
     pubFeatureCloudsv1.shutdown();
     pubFeatureCloudsv2.shutdown();
     pubFeatureCloudsFORSTER.shutdown();
+    pubFeatureCloudsFORSTER2.shutdown();
     pubPathMODEL1.shutdown();
     pubPathMODEL2.shutdown();
     pubPathFORSTER.shutdown();
+    pubPathFORSTER2.shutdown();
     pubPoseIMUMODEL1.shutdown();
     pubPoseIMUMODEL2.shutdown();
     pubPoseIMUFORSTER.shutdown();
+    pubPoseIMUFORSTER2.shutdown();
     subPOSETrue.shutdown();
     subIMUMeas.shutdown();
     subUVMeas.shutdown();
@@ -243,6 +253,9 @@ void setup_subpub(ros::NodeHandle& nh) {
     ROS_INFO("Publishing: %s", pubFeatureCloudsv2.getTopic().c_str());
     pubFeatureCloudsFORSTER = nh.advertise<sensor_msgs::PointCloud2>("cpi_compare/feature_cloud_forster", 2);
     ROS_INFO("Publishing: %s", pubFeatureCloudsFORSTER.getTopic().c_str());
+    pubFeatureCloudsFORSTER2 = nh.advertise<sensor_msgs::PointCloud2>("cpi_compare/feature_cloud_forster2", 2);
+    ROS_INFO("Publishing: %s", pubFeatureCloudsFORSTER2.getTopic().c_str());
+
 
     // Path visualization
     pubPathMODEL1 = nh.advertise<nav_msgs::Path>("cpi_compare/path_imu_cpi1", 2);
@@ -251,6 +264,9 @@ void setup_subpub(ros::NodeHandle& nh) {
     ROS_INFO("Publishing: %s", pubPathMODEL2.getTopic().c_str());
     pubPathFORSTER = nh.advertise<nav_msgs::Path>("cpi_compare/path_imu_forster", 2);
     ROS_INFO("Publishing: %s", pubPathFORSTER.getTopic().c_str());
+    pubPathFORSTER2 = nh.advertise<nav_msgs::Path>("cpi_compare/path_imu_forster2", 2);
+    ROS_INFO("Publishing: %s", pubPathFORSTER2.getTopic().c_str());
+
 
     // IMU pose visualization
     pubPoseIMUMODEL1 = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("cpi_compare/pose_imu_cpi1", 2);
@@ -259,6 +275,9 @@ void setup_subpub(ros::NodeHandle& nh) {
     ROS_INFO("Publishing: %s", pubPoseIMUMODEL2.getTopic().c_str());
     pubPoseIMUFORSTER = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("cpi_compare/pose_imu_forster", 2);
     ROS_INFO("Publishing: %s", pubPoseIMUFORSTER.getTopic().c_str());
+    pubPoseIMUFORSTER2 = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("cpi_compare/pose_imu_forster2", 2);
+    ROS_INFO("Publishing: %s", pubPoseIMUFORSTER2.getTopic().c_str());
+
 
     // Subscribe to our true pose measurements
     //subPOSETrue = nh.subscribe("cpi_compare/truepose_imu", 2000, handle_measurement_pose);
@@ -375,9 +394,12 @@ void handle_measurement_uv(cpi_comm::CameraMeasurement::Ptr msg) {
     state = graphsolver->getcurrentstateFORSTER();
     publish_JPLstate(msg->header.stamp.toSec(),state,covariance,pubPathFORSTER,pubPoseIMUFORSTER,poses_estFORSTER);
 
+    // FORSTER2 DISCRETE
+    gtsam::Pose3 gtsam_state = graphsolver->getcurrentstateFORSTER2();
+    publish_GTSAMstate(msg->header.stamp.toSec(), gtsam_state, covariance, pubPathFORSTER2, pubPoseIMUFORSTER2, poses_estFORSTER2);
+
     // Publish our feature cloud
     publish_FeatureCloud(msg->header.stamp.toSec());
-
 }
 
 
@@ -470,6 +492,93 @@ void publish_JPLstate(double timestamp, JPLNavState& state, Eigen::Matrix<double
 }
 
 
+/**
+ * Given a GTSAM Navigation State, this should publish it onto ROS for visualization
+ */
+void publish_GTSAMstate(double timestamp, gtsam::Pose3& state, Eigen::Matrix<double, 6, 6>& covariance,
+                      ros::Publisher& pubPath, ros::Publisher& pubPoseIMU, vector<geometry_msgs::PoseStamped>& poses_est) {
+
+    // Return if we have not initialized yet
+    if(!graphsolver->is_initialized())
+        return;
+
+    // Create our stamped pose with covariance
+    geometry_msgs::PoseWithCovarianceStamped pose;
+    pose.header.stamp = ros::Time(timestamp);
+    pose.header.frame_id = "global";
+
+    common::gtsam_ros_utils::GtsamToRosPose3(state, pose.pose.pose);
+    /*pose.pose.pose.orientation.x = state.q()(0);
+    pose.pose.pose.orientation.y = state.q()(1);
+    pose.pose.pose.orientation.z = state.q()(2);
+    pose.pose.pose.orientation.w = state.q()(3);
+    pose.pose.pose.position.x = state.p()(0);
+    pose.pose.pose.position.y = state.p()(1);
+    pose.pose.pose.position.z = state.p()(2);*/
+
+    // Finally set the covariance in the message
+    pose.pose.covariance[0] = covariance(0,0); // 0
+    pose.pose.covariance[1] = covariance(0,1);
+    pose.pose.covariance[2] = covariance(0,2);
+    pose.pose.covariance[3] = covariance(0,3);
+    pose.pose.covariance[4] = covariance(0,4);
+    pose.pose.covariance[5] = covariance(0,5);
+    pose.pose.covariance[6] = covariance(1,0); // 1
+    pose.pose.covariance[7] = covariance(1,1);
+    pose.pose.covariance[8] = covariance(1,2);
+    pose.pose.covariance[9] = covariance(1,3);
+    pose.pose.covariance[10] = covariance(1,4);
+    pose.pose.covariance[11] = covariance(1,5);
+    pose.pose.covariance[12] = covariance(2,0); // 2
+    pose.pose.covariance[13] = covariance(2,1);
+    pose.pose.covariance[14] = covariance(2,2);
+    pose.pose.covariance[15] = covariance(2,3);
+    pose.pose.covariance[16] = covariance(2,4);
+    pose.pose.covariance[17] = covariance(2,5);
+    pose.pose.covariance[18] = covariance(3,0); // 3
+    pose.pose.covariance[19] = covariance(3,1);
+    pose.pose.covariance[20] = covariance(3,2);
+    pose.pose.covariance[21] = covariance(3,3);
+    pose.pose.covariance[22] = covariance(3,4);
+    pose.pose.covariance[23] = covariance(3,5);
+    pose.pose.covariance[24] = covariance(4,0); // 4
+    pose.pose.covariance[25] = covariance(4,1);
+    pose.pose.covariance[26] = covariance(4,2);
+    pose.pose.covariance[27] = covariance(4,3);
+    pose.pose.covariance[28] = covariance(4,4);
+    pose.pose.covariance[29] = covariance(4,5);
+    pose.pose.covariance[30] = covariance(5,0); // 5
+    pose.pose.covariance[31] = covariance(5,1);
+    pose.pose.covariance[32] = covariance(5,2);
+    pose.pose.covariance[33] = covariance(5,3);
+    pose.pose.covariance[34] = covariance(5,4);
+    pose.pose.covariance[35] = covariance(5,5);
+
+    // Publish this pose
+    pubPoseIMU.publish(pose);
+
+    // Create our stamped pose for path publishing
+    geometry_msgs::PoseStamped poseStamped;
+    poseStamped.header.stamp = ros::Time(timestamp);
+    poseStamped.header.frame_id = "global";
+    poseStamped.pose = pose.pose.pose;
+    poses_est.push_back(poseStamped);
+
+    // Create pose arrays and publish
+    nav_msgs::Path patharr;
+    patharr.header.stamp = ros::Time(timestamp);
+    patharr.header.seq = poses_seq++;
+    patharr.header.frame_id = "global";
+    patharr.poses = poses_est;
+    pubPath.publish(patharr);
+
+
+    // Debug print current position
+    ROS_INFO("[STATE]: q = %.4f, %.4f, %.4f, %.4f | v = %.2f, %.2f, %.2f | p = %.2f, %.2f, %.2f",
+             pose.pose.pose.orientation.x, pose.pose.pose.orientation.y, pose.pose.pose.orientation.z, pose.pose.pose.orientation.w, 0.0, 0.0, 0.0, 0.0,
+             pose.pose.pose.position.x, pose.pose.pose.position.y, pose.pose.pose.position.z);
+
+}
 
 
 /**

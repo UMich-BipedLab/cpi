@@ -8,7 +8,7 @@ project(cpi_compare)
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../../cmake)
 
 # Find catkin (the ROS build system)
-find_package(catkin REQUIRED COMPONENTS roscpp tf pcl_ros std_msgs geometry_msgs sensor_msgs nav_msgs visualization_msgs pcl_conversions cpi_comm)
+find_package(catkin REQUIRED COMPONENTS roscpp tf pcl_ros std_msgs geometry_msgs sensor_msgs nav_msgs visualization_msgs pcl_conversions cpi_comm common gtsam_backend)
 
 # Include libraries
 find_package(GTSAM REQUIRED) # source: https://bitbucket.org/gtborg/gtsam/

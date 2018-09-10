@@ -124,18 +124,28 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
 
         // Forster discrete preintegration
         ImuFactorCPIv1 imuFactorFORSTER = createimufactor_discrete(timestamp, values_initialFORSTER);
+        imu_times = imu_timestemp;
+        imu_linaccs = imu_linaccstemp;
+        imu_angvel = imu_angveltemp;
         graph_newFORSTER->add(imuFactorFORSTER);
         graphFORSTER->add(imuFactorFORSTER);
 
-        // Debug print
-        //cout << "=======================================================" << endl;
-        //cout << "MODEL 1: " << endl << imuFactorMODEL1 << endl;
-        //cout << "=======================================================" << endl;
-        //cout << "MODEL 2: " << endl << imuFactorMODEL2 << endl;
-        //cout << "=======================================================" << endl;
-        //cout << "DISCRETE: " << endl << imuFactorFORSTER << endl;
-        //cout << "=======================================================" << endl;
+        // Forster2 discrete preintegration
+        PreintegratedCombinedMeasurements* preint_gtsam;
+        CombinedImuFactor imuFactorFORSTER2 = createimufactor_discrete2(timestamp, values_initialFORSTER2, preint_gtsam);
+        graph_newFORSTER2->add(imuFactorFORSTER2);
+        graphFORSTER2->add(imuFactorFORSTER2);
 
+
+        // Debug print
+        /*cout << "=======================================================" << endl;
+        cout << "MODEL 1: " << endl << imuFactorMODEL1 << endl;
+        cout << "=======================================================" << endl;
+        cout << "MODEL 2: " << endl << imuFactorMODEL2 << endl;
+        cout << "=======================================================" << endl;
+        cout << "DISCRETE: " << endl << imuFactorFORSTER << endl;
+        cout << "=======================================================" << endl;
+        */
 
         //==========================================================================
         // NEW PREDICTED STATE
@@ -145,7 +155,22 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         JPLNavState newstateMODEL1 = getpredictedstate_v1(imuFactorMODEL1, values_initialMODEL1);
         JPLNavState newstateMODEL2 = getpredictedstate_v2(imuFactorMODEL2, values_initialMODEL2);
         JPLNavState newstateFORSTER = getpredictedstate_v1(imuFactorFORSTER, values_initialFORSTER);
+        NavState newstateFORSTER2 = getpredictedstate_discrete(preint_gtsam, values_initialFORSTER2);
+        imuBias::ConstantBias newbiasFORSTER2 = values_initialFORSTER2.at<imuBias::ConstantBias>(B(ct_state));
 
+       
+        // Debug print
+        /*cout << "=======================================================" << endl;
+        cout << "MODEL 1: " << endl << newstateMODEL1 << endl;
+        cout << "=======================================================" << endl;
+        cout << "MODEL 2: " << endl << newstateMODEL2 << endl;
+        cout << "=======================================================" << endl;
+        cout << "DISCRETE: " << endl << newstateFORSTER << endl;
+        cout << "=======================================================" << endl;
+        cout << "DISCRETE 2: " << endl << newstateFORSTER2 << endl;
+        cout << "=======================================================" << endl;*/
+
+       
         // Move node count forward in time
         ct_state++;
 
@@ -153,14 +178,22 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         values_newMODEL1.insert(X(ct_state), newstateMODEL1);
         values_newMODEL2.insert(X(ct_state), newstateMODEL2);
         values_newFORSTER.insert(X(ct_state), newstateFORSTER);
+        values_newFORSTER2.insert(Y(ct_state), newstateFORSTER2.pose());
+        values_newFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
+        values_newFORSTER2.insert(B(ct_state), newbiasFORSTER2);
+
         values_initialMODEL1.insert(X(ct_state), newstateMODEL1);
         values_initialMODEL2.insert(X(ct_state), newstateMODEL2);
         values_initialFORSTER.insert(X(ct_state), newstateFORSTER);
+        values_initialFORSTER2.insert(Y(ct_state), newstateFORSTER2.pose());
+        values_initialFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
+        values_initialFORSTER2.insert(B(ct_state), newbiasFORSTER2);
 
         // Append to our fix lag smoother timestamps
         newTimestampsMODEL1[X(ct_state)] = timestamp;
         newTimestampsMODEL2[X(ct_state)] = timestamp;
         newTimestampsFORSTER[X(ct_state)] = timestamp;
+        newTimestampsFORSTER2[Y(ct_state)] = timestamp;
 
     }
 
@@ -227,20 +260,33 @@ void GraphSolver::optimize() {
         exit(EXIT_FAILURE);
     }
 
+    // Perform smoothing update
+    try {
+        smootherBatchFORSTER2->update(*graph_newFORSTER2, values_newFORSTER2, newTimestampsFORSTER2);
+        values_initialFORSTER2 = smootherBatchFORSTER2->calculateEstimate();
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("FORSTER2 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
     // Remove the used up nodes
     values_newMODEL1.clear();
     values_newMODEL2.clear();
     values_newFORSTER.clear();
+    values_newFORSTER2.clear();
 
     // Clear used timestamps
     newTimestampsMODEL1.clear();
     newTimestampsMODEL2.clear();
     newTimestampsFORSTER.clear();
+    newTimestampsFORSTER2.clear();
 
     // Remove the used up factors
     graph_newMODEL1->resize(0);
     graph_newMODEL2->resize(0);
     graph_newFORSTER->resize(0);
+    graph_newFORSTER2->resize(0);
 
     // Debug print time
     boost::posix_time::ptime t2(boost::posix_time::microsec_clock::local_time());
@@ -340,6 +386,22 @@ void GraphSolver::trytoinitalize(double timestamp) {
     graphMODEL2->add(priorfactor);
     graphFORSTER->add(priorfactor);
 
+    // Create gtsam prior factor and add it to FORSTER2 graph
+    gtsam::Pose3 prior_pose = gtsam::Pose3(gtsam::Quaternion(q_GtoI(3), q_GtoI(0), q_GtoI(1), q_GtoI(2)), gtsam::Point3(p_IinG));
+    imuBias::ConstantBias prior_imu_bias;
+    
+    noiseModel::Diagonal::shared_ptr pose_noise_model = noiseModel::Diagonal::Sigmas((Vector(6) << 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4).finished());
+    noiseModel::Diagonal::shared_ptr velocity_noise_model = noiseModel::Isotropic::Sigma(3, 1e-4);
+    noiseModel::Diagonal::shared_ptr bias_noise_model = noiseModel::Isotropic::Sigma(6, 1e-4);
+
+    graph_newFORSTER2->add(PriorFactor<Pose3>(Y(ct_state), prior_pose, pose_noise_model));
+    graph_newFORSTER2->add(PriorFactor<Vector3>(V(ct_state), v_IinG, velocity_noise_model));
+    graph_newFORSTER2->add(PriorFactor<imuBias::ConstantBias>(B(ct_state), prior_imu_bias, bias_noise_model));
+    graphFORSTER2->add(PriorFactor<Pose3>(Y(ct_state), prior_pose, pose_noise_model));
+    graphFORSTER2->add(PriorFactor<Vector3>(V(ct_state), v_IinG, velocity_noise_model));
+    graphFORSTER2->add(PriorFactor<imuBias::ConstantBias>(B(ct_state), prior_imu_bias, bias_noise_model));
+
+
     // Add our initial state
     values_newMODEL1.insert(X(ct_state), JPLNavState(q_GtoI, bg, v_IinG, ba, p_IinG));
     values_newMODEL2.insert(X(ct_state), JPLNavState(q_GtoI, bg, v_IinG, ba, p_IinG));
@@ -348,10 +410,20 @@ void GraphSolver::trytoinitalize(double timestamp) {
     values_initialMODEL2.insert(X(ct_state), JPLNavState(q_GtoI, bg, v_IinG, ba, p_IinG));
     values_initialFORSTER.insert(X(ct_state), JPLNavState(q_GtoI, bg, v_IinG, ba, p_IinG));
 
+    // Add initial state to FORSTER2 model
+    values_newFORSTER2.insert(Y(ct_state), prior_pose);
+    values_newFORSTER2.insert(V(ct_state), v_IinG);
+    values_newFORSTER2.insert(B(ct_state), prior_imu_bias);
+    
+    values_initialFORSTER2.insert(Y(ct_state), prior_pose);
+    values_initialFORSTER2.insert(V(ct_state), v_IinG);
+    values_initialFORSTER2.insert(B(ct_state), prior_imu_bias);
+
     // Append to our fix lag smoother timestamps
     newTimestampsMODEL1[X(ct_state)] = timestamp;
     newTimestampsMODEL2[X(ct_state)] = timestamp;
     newTimestampsFORSTER[X(ct_state)] = timestamp;
+    newTimestampsFORSTER2[Y(ct_state)] = timestamp;
 
     // Clear all old imu messages (keep the last two)
     imu_times.erase(imu_times.begin(), imu_times.end()-1);

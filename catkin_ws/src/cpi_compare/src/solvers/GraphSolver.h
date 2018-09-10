@@ -64,12 +64,21 @@
 #include "cpi/CpiV1.h"
 #include "cpi/CpiV2.h"
 
+#include <gtsam/slam/PriorFactor.h>
+#include "gtsam_backend/gtsam_solver.h"
+#include "gtsam_backend/imu_preintegration.h"
+#include "gtsam_backend/visual_odometry.h"
+
 using namespace std;
 using namespace gtsam;
 
 
 using gtsam::symbol_shorthand::X; // X: our JPL states
 using gtsam::symbol_shorthand::F; // F: our feature node
+
+using gtsam::symbol_shorthand::Y; // Pose3 (x,y,z,r,p,y)
+using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
+using gtsam::symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 
 
 class GraphSolver {
@@ -86,15 +95,18 @@ public:
         this->graphMODEL1 = new gtsam::NonlinearFactorGraph();
         this->graphMODEL2 = new gtsam::NonlinearFactorGraph();
         this->graphFORSTER = new gtsam::NonlinearFactorGraph();
+        this->graphFORSTER2 = new gtsam::NonlinearFactorGraph();
         this->graph_newMODEL1 = new gtsam::NonlinearFactorGraph();
         this->graph_newMODEL2 = new gtsam::NonlinearFactorGraph();
         this->graph_newFORSTER = new gtsam::NonlinearFactorGraph();
+        this->graph_newFORSTER2 = new gtsam::NonlinearFactorGraph();
         // Fixed lag smoothers BATCH
         gtsam::LevenbergMarquardtParams params;
         params.setVerbosity("ERROR"); // SILENT, TERMINATION, ERROR, VALUES, DELTA, LINEAR
         this->smootherBatchMODEL1 = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
         this->smootherBatchMODEL2 = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
         this->smootherBatchFORSTER = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
+        this->smootherBatchFORSTER2 = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
 
     }
 
@@ -135,6 +147,13 @@ public:
         if(values_initialFORSTER.empty())
             return JPLNavState();
         return values_initialFORSTER.at<JPLNavState>(X(ct_state));
+    }
+
+    /// This function returns the current nav state, return origin if we have not initialized yet
+    gtsam::Pose3 getcurrentstateFORSTER2() {
+        if(values_initialFORSTER2.empty())
+            return gtsam::Pose3();
+        return values_initialFORSTER2.at<gtsam::Pose3>(Y(ct_state));
     }
 
     /// Returns the currently tracked features
@@ -246,10 +265,13 @@ private:
 
     /// Function that will compound the GTSAM preintegrator to get discrete preintegration measurement
     ImuFactorCPIv1 createimufactor_discrete(double updatetime, gtsam::Values& values_initial);
+    CombinedImuFactor createimufactor_discrete2(double updatetime, gtsam::Values& values_initial, PreintegratedCombinedMeasurements*& preint_gtsam);
 
     /// Function will get the predicted JPL Navigation State based on this generated measurement
     JPLNavState getpredictedstate_v1(ImuFactorCPIv1& imuFactor, gtsam::Values& values_initial);
     JPLNavState getpredictedstate_v2(ImuFactorCPIv2& imuFactor, gtsam::Values& values_initial);
+    NavState getpredictedstate_discrete(PreintegratedCombinedMeasurements* preint_gtsam, gtsam::Values& values_initial);
+
 
     /// Column swap
     void swapcovariance(Eigen::Matrix<double,15,15>& covariance, int coli, int colj);
@@ -272,21 +294,25 @@ private:
     gtsam::NonlinearFactorGraph* graphMODEL1;
     gtsam::NonlinearFactorGraph* graphMODEL2;
     gtsam::NonlinearFactorGraph* graphFORSTER;
+    gtsam::NonlinearFactorGraph* graphFORSTER2;
 
     // New factors that have not been optimized yet
     gtsam::NonlinearFactorGraph* graph_newMODEL1;
     gtsam::NonlinearFactorGraph* graph_newMODEL2;
     gtsam::NonlinearFactorGraph* graph_newFORSTER;
+    gtsam::NonlinearFactorGraph* graph_newFORSTER2;
 
     // Fixed lag smothers objects
     BatchFixedLagSmoother* smootherBatchMODEL1;
     BatchFixedLagSmoother* smootherBatchMODEL2;
     BatchFixedLagSmoother* smootherBatchFORSTER;
+    BatchFixedLagSmoother* smootherBatchFORSTER2;
 
     // Timestamps of the current nodes in our graph
     FixedLagSmoother::KeyTimestampMap newTimestampsMODEL1;
     FixedLagSmoother::KeyTimestampMap newTimestampsMODEL2;
     FixedLagSmoother::KeyTimestampMap newTimestampsFORSTER;
+    FixedLagSmoother::KeyTimestampMap newTimestampsFORSTER2;
 
     // Current ID of state and features
     size_t ct_state = 0;
@@ -296,11 +322,13 @@ private:
     gtsam::Values values_initialMODEL1;
     gtsam::Values values_initialMODEL2;
     gtsam::Values values_initialFORSTER;
+    gtsam::Values values_initialFORSTER2;
 
     // New nodes that have not been optimized
     gtsam::Values values_newMODEL1;
     gtsam::Values values_newMODEL2;
     gtsam::Values values_newFORSTER;
+    gtsam::Values values_newFORSTER2;
 
     //==========================================================================
     // SYSTEM / HOUSEKEEPING VARIABLES

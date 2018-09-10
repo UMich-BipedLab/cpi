@@ -198,6 +198,7 @@ ImuFactorCPIv1 GraphSolver::createimufactor_discrete(double updatetime, gtsam::V
     }
     // Debug info
     //cout << "imu dt total = " << preint.Del_t << " | " << preintrk4.Del_t << " | " << preint_gtsam.deltaTij() << " from " << imucompound << " readings" << endl;
+    //cout << "imu dt total = " << preint_gtsam.deltaTij() << " from " << imucompound << " readings" << endl;
 
     // Get our preintegrated measurement
     // Note: We need to flip their rotation since is opposite
@@ -229,6 +230,113 @@ ImuFactorCPIv1 GraphSolver::createimufactor_discrete(double updatetime, gtsam::V
                           alpha,beta,rot_2_quat(kplus_R_k),ba_K,bg_K,J_q,
                           Beta_Jacob_Gyro,Alpha_Jacob_Gyro,Beta_Jacob_Accel,Alpha_Jacob_Accel);
 
+}
+
+
+/**
+ * This function will create a discrete IMU factor using the GTSAM preintegrator class
+ * This will integrate from the current state time up to the new update time
+ */
+CombinedImuFactor GraphSolver::createimufactor_discrete2(double updatetime, gtsam::Values& values_initial, PreintegratedCombinedMeasurements*& preint_gtsam) {
+
+    // Get the current state and its bias estimate
+    imuBias::ConstantBias prior_imu_bias = values_initial.at<imuBias::ConstantBias>(B(ct_state));
+    //Bias3 bg_K = stateK.bg();
+    //Bias3 ba_K = stateK.ba();
+
+    // Create GTSAM preintegration parameters for use with Foster's version
+    boost::shared_ptr<PreintegratedCombinedMeasurements::Params> p = PreintegratedCombinedMeasurements::Params::MakeSharedD(0.0);
+    p->accelerometerCovariance = config->sigma_a_sq*Matrix33::Identity(3,3); // acc white noise in continuous
+    p->gyroscopeCovariance = config->sigma_g_sq*Matrix33::Identity(3,3); // gyro white noise in continuous
+    p->biasAccCovariance = config->sigma_wa_sq*Matrix33::Identity(3,3); // acc bias in continuous
+    p->biasOmegaCovariance = config->sigma_wg_sq*Matrix33::Identity(3,3); // gyro bias in continuous
+    p->n_gravity = -config->gravity; // gravity in navigation frame
+
+    // Unknown noises not specified in the RSS paper
+    p->integrationCovariance = 0.0*Matrix33::Identity(3,3); // error committed in integrating position from velocities
+    p->biasAccOmegaInt = 0.0*Matrix66::Identity(6,6); // error in the bias used for preintegration
+
+    // Actually create the GTSAM preintegration
+    //imuBias::ConstantBias prior_imu_bias(ba_K,bg_K);
+    preint_gtsam = new PreintegratedCombinedMeasurements(p, prior_imu_bias);
+
+    int imucompound = 0;
+
+    // TODO: Clean this code, and use the mutex
+    while(imu_times.size() > 1 && imu_times.at(1) <= updatetime) {
+        double dt = imu_times.at(1) - imu_times.at(0);
+        if (dt >= 0) {
+            // Our IMU measurement
+            Eigen::Vector3d meas_angvel;
+            Eigen::Vector3d meas_linaccs;
+            meas_angvel = imu_angvel.at(0);
+            meas_linaccs = imu_linaccs.at(0);
+            // Preintegrate this measurement!
+            preint_gtsam->integrateMeasurement(meas_linaccs, meas_angvel, dt);
+        }
+        //cout << "state time = " << updatetime << " | imu0 = " << imu_times.at(0) << " | imu1 = " << imu_times.at(1) << " | dt = " << dt << endl;
+        //cout << "imu dt = " << dt << " | am = " << imu_linaccs.at(0).transpose() << " | wm = " << imu_angvel.at(0).transpose() << endl;
+        imu_angvel.erase(imu_angvel.begin());
+        imu_linaccs.erase(imu_linaccs.begin());
+        imu_times.erase(imu_times.begin());
+        imucompound++;
+    }
+
+    // TODO: Clean this code, and use the mutex
+    double dt_f = updatetime - imu_times.at(0);
+    if (dt_f > 0) {
+        // Our IMU measurement
+        Eigen::Vector3d meas_angvel;
+        Eigen::Vector3d meas_linaccs;
+        meas_angvel = imu_angvel.at(0);
+        meas_linaccs = imu_linaccs.at(0);
+        // Preintegrate this measurement!
+        preint_gtsam->integrateMeasurement(meas_linaccs, meas_angvel, dt_f);
+        imu_times.at(0) = updatetime;
+        imucompound++;
+    }
+    // Debug info
+    //cout << "imu dt total = " << preint.Del_t << " | " << preintrk4.Del_t << " | " << preint_gtsam.deltaTij() << " from " << imucompound << " readings" << endl;
+    //cout << "imu dt total = " << preint_gtsam->deltaTij() << " from " << imucompound << " readings" << endl;
+
+      
+    PreintegratedCombinedMeasurements *preint_imu_combined = dynamic_cast<PreintegratedCombinedMeasurements*>(preint_gtsam);
+    
+    return CombinedImuFactor(Y(ct_state  ), V(ct_state),
+                             Y(ct_state+1), V(ct_state+1),  
+                             B(ct_state  ), B(ct_state+1),
+                             *preint_imu_combined);
+
+    // Get our preintegrated measurement
+    // Note: We need to flip their rotation since is opposite
+    /*Eigen::Matrix<double,3,1> alpha = preint_gtsam.deltaPij();
+    Eigen::Matrix<double,3,1> beta = preint_gtsam.deltaVij();
+    Eigen::Matrix<double,3,3> kplus_R_k = preint_gtsam.deltaRij().matrix().transpose();
+
+    // Jacobians in respect to the bias
+    // NOTE: Their J_q is the opposite of ours
+    Eigen::Matrix<double,3,3> J_q = -preint_gtsam.delRdelBiasOmega();
+    Eigen::Matrix<double,3,3> Alpha_Jacob_Accel = preint_gtsam.delPdelBiasAcc();
+    Eigen::Matrix<double,3,3> Alpha_Jacob_Gyro = preint_gtsam.delPdelBiasOmega();
+    Eigen::Matrix<double,3,3> Beta_Jacob_Accel = preint_gtsam.delVdelBiasAcc();
+    Eigen::Matrix<double,3,3> Beta_Jacob_Gyro = preint_gtsam.delVdelBiasOmega();
+
+    // Time interval we integrated over
+    double Del_t = preint_gtsam.deltaTij();
+
+    // Need to transform from GTSAM covariance into our state
+    // CPIv1: [PreintROTATION BiasOmega PreintVELOCITY BiasAcc PreintPOSITION]
+    // GTSAM: [PreintROTATION PreintPOSITION PreintVELOCITY BiasAcc BiasOmega]
+    Eigen::Matrix<double,15,15> P_combined = preint_gtsam.preintMeasCov();
+
+    //1: Swap 1 & 4 (position and bias omega)
+    swapcovariance(P_combined,1,4);
+
+    // Create our factor between current and next state!
+    return ImuFactorCPIv1(X(ct_state),X(ct_state+1),P_combined,Del_t,config->gravity,
+                          alpha,beta,rot_2_quat(kplus_R_k),ba_K,bg_K,J_q,
+                          Beta_Jacob_Gyro,Alpha_Jacob_Gyro,Beta_Jacob_Accel,Alpha_Jacob_Accel);
+*/
 }
 
 
@@ -304,4 +412,14 @@ JPLNavState GraphSolver::getpredictedstate_v2(ImuFactorCPIv2& imuFactor, gtsam::
     // Return our new state!
     return JPLNavState(q_GtoK1, bg_K, v_K1inG, ba_K, p_K1inG);
 
+}
+
+NavState GraphSolver::getpredictedstate_discrete(PreintegratedCombinedMeasurements* preint_gtsam, gtsam::Values& values_initial) {
+
+  // Get the current state (t=k)
+  NavState stateK = NavState(values_initial.at<Pose3>(Y(ct_state)), values_initial.at<Vector3>(V(ct_state)));
+  imuBias::ConstantBias biasK = values_initial.at<imuBias::ConstantBias>(B(ct_state));
+  
+  // From this we should predict where we will be at the next time (t=K+1)
+  return NavState(preint_gtsam->predict(stateK, biasK));
 }
