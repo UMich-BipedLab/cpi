@@ -190,16 +190,16 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         values_newMODEL1.insert(F(ct_features), gtsam::Point3(measurementMODEL1.second.pos_FinG));
         values_newMODEL2.insert(F(ct_features), gtsam::Point3(measurementMODEL2.second.pos_FinG));
         values_newFORSTER.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
-        values_newFORSTER2.insert<Point3>(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
+        values_newFORSTER2.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
         values_initialMODEL1.insert(F(ct_features), gtsam::Point3(measurementMODEL1.second.pos_FinG));
         values_initialMODEL2.insert(F(ct_features), gtsam::Point3(measurementMODEL2.second.pos_FinG));
         values_initialFORSTER.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
-        values_initialFORSTER2.insert<Point3>(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
+        values_initialFORSTER2.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
 
         //if (ct_features==1) {
-              noiseModel::Isotropic::shared_ptr pointNoise = noiseModel::Isotropic::Sigma(3, config->sigma_camera);
-              graph_newFORSTER2->emplace_shared<PriorFactor<Point3> >(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG), pointNoise); // add directly to graph
-              graphFORSTER2->emplace_shared<PriorFactor<Point3> >(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG), pointNoise); // add directly to graph
+              //noiseModel::Isotropic::shared_ptr pointNoise = noiseModel::Isotropic::Sigma(3, config->sigma_camera);
+              //graph_newFORSTER2->emplace_shared<PriorFactor<Point3> >(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG), pointNoise); // add directly to graph
+              //graphFORSTER2->emplace_shared<PriorFactor<Point3> >(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG), pointNoise); // add directly to graph
         //}
 
         // Append to our fix lag smoother timestamps
