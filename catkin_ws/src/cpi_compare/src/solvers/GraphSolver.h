@@ -65,6 +65,7 @@
 #include "cpi/CpiV2.h"
 
 #include <gtsam/slam/PriorFactor.h>
+#include <gtsam/slam/ProjectionFactor.h>
 #include "gtsam_backend/gtsam_solver.h"
 #include "gtsam_backend/imu_preintegration.h"
 #include "gtsam_backend/visual_odometry.h"

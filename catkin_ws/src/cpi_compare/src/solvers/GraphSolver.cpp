@@ -230,6 +230,12 @@ void GraphSolver::optimize() {
     // Start our timer
     boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
 
+    std::cout << "--------------------------------------------------" << std::endl;
+    //graph_newFORSTER->print();
+    std::cout << "--------------------------------------------------" << std::endl;
+    //graph_newFORSTER2->print();
+    std::cout << "--------------------------------------------------" << std::endl;
+
     // Perform smoothing update
     try {
         smootherBatchMODEL1->update(*graph_newMODEL1, values_newMODEL1, newTimestampsMODEL1);
