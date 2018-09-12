@@ -254,6 +254,40 @@ public:
     }
 
 
+    /// Returns the currently tracked features
+    /*std::vector<Eigen::Vector3d> getcurrentfeaturesFORSTER2() {
+        // Return if we do not have any nodes yet
+        if(values_initialFORSTER2.empty()) {
+            return std::vector<Eigen::Vector3d>();
+        }
+        // Our vector of points in the global
+        std::vector<Eigen::Vector3d> features;
+        // Else loop through the features and return them
+        for(size_t i=1; i<= ct_features; i++) {
+            // Ensure valid feature
+            if(!values_initialFORSTER2.exists(F(i)))
+                continue;
+            // If not doing inverse depth, just directly add the feature
+            if(!config->useInverseDepth) {
+                features.push_back(values_initialFORSTER2.at<Point3>(F(i)));
+                continue;
+            }
+            // If inverse depth, need to transform into global
+            if(!values_initialFORSTER2.exists(Y(measurement_anchor_lookup[i])))
+                continue;
+            // Transform back into the global frame!
+            Pose3 state = values_initialFORSTER2.at<gtsam::Pose3>(Y(measurement_anchor_lookup[i]));
+            Eigen::Vector3d abr = values_initialFORSTER.at<Point3>(F(i));
+            Eigen::Vector3d p_FinA;
+            p_FinA << abr(0)/abr(2), abr(1)/abr(2), 1/abr(2);
+
+            JPLQuaternion q(state.rotation.toQuaternion())
+            Eigen::Vector3d p_FinG = quat_2_Rot(state.q()).transpose()*p_FinA+state.p();
+            features.push_back(p_FinG);
+        }
+        return features;
+    }*/
+
 
 private:
 

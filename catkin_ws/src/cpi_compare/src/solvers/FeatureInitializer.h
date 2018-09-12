@@ -48,6 +48,7 @@ using namespace std;
 
 
 using gtsam::symbol_shorthand::X; // X: our JPL states
+using gtsam::symbol_shorthand::Y;
 using gtsam::symbol_shorthand::F; // F: our feature node
 
 

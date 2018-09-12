@@ -42,11 +42,24 @@ void FeatureInitializer::create_camera_poses() {
     // This means the first 7 of this vector should NOT be used!!! (they will be all zero)
     for (size_t i=0; i <= nodect; i++){
         // Only get it if we have that key
-        if(!values.exists(X(i)))
-            continue;
+        //if(!values.exists(X(i)))
+        //    continue;
+        Vector4d q_GtoI;
+        Vector3d p_IinG;
         // Get the current state
-        Vector4d q_GtoI = values.at<gtsam::JPLNavState>(X(i)).q();
-        Vector3d p_IinG = values.at<gtsam::JPLNavState>(X(i)).p();
+        if (values.exists(X(i))) {
+          q_GtoI = values.at<gtsam::JPLNavState>(X(i)).q();
+          p_IinG = values.at<gtsam::JPLNavState>(X(i)).p();
+          //std::cout << q_GtoI << std::endl;
+          //std::cout << p_IinG << std::endl;
+        } else if (values.exists(Y(i))) {
+          gtsam::Quaternion q = values.at<gtsam::Pose3>(Y(i)).rotation().toQuaternion();
+          q_GtoI = Vector4d(q.x(), q.y(), q.z(), q.w());
+          p_IinG = Vector3d(values.at<gtsam::Pose3>(Y(i)).translation());
+          //std::cout << q_GtoI << std::endl;
+          //std::cout << p_IinG << std::endl;
+        } else
+          continue;
         // Transform into camera 0 frame of reference
         cam0poses.block(7*i,0,4,1) = rot_2_quat(config->R_C0toI.transpose()*quat_2_Rot(q_GtoI));
         cam0poses.block(7*i+4,0,3,1) = p_IinG - quat_2_Rot(q_GtoI).transpose()*config->R_C0toI*config->p_IinC0;
@@ -87,10 +100,26 @@ bool FeatureInitializer::initialize_feature(feature& feat) {
         return false;
     }
 
-
+    Vector4d q_GtoA;
+    Vector3d p_AinG;
+    int i = feat.leftstateids.at(0);
+    // Get the current state
+    if (values.exists(X(i))) {
+      q_GtoA = values.at<gtsam::JPLNavState>(X(i)).q();
+      p_AinG = values.at<gtsam::JPLNavState>(X(i)).p();
+      //std::cout << q_GtoI << std::endl;
+      //std::cout << p_IinG << std::endl;
+    } else if (values.exists(Y(i))) {
+      gtsam::Quaternion q = values.at<gtsam::Pose3>(Y(i)).rotation().toQuaternion();
+      q_GtoA = Vector4d(q.x(), q.y(), q.z(), q.w());
+      p_AinG = Vector3d(values.at<gtsam::Pose3>(Y(i)).translation());
+      //std::cout << q_GtoI << std::endl;
+      //std::cout << p_IinG << std::endl;
+    }
+    
     // Calculate inverse depth for this feature
-    Vector4d q_GtoA = values.at<gtsam::JPLNavState>(X(feat.leftstateids.at(0))).q();
-    Vector3d p_AinG = values.at<gtsam::JPLNavState>(X(feat.leftstateids.at(0))).p();
+    //Vector4d q_GtoA = values.at<gtsam::JPLNavState>(X(feat.leftstateids.at(0))).q();
+    //Vector3d p_AinG = values.at<gtsam::JPLNavState>(X(feat.leftstateids.at(0))).p();
     Vector3d feat_FinA = config->R_C0toI.transpose()*quat_2_Rot(q_GtoA)*(feat.pos_FinG-p_AinG) - config->R_C0toI*config->p_IinC0;
     feat.pos_FinA_inv << feat_FinA(0)/feat_FinA(2),feat_FinA(1)/feat_FinA(2),1/feat_FinA(2);
 
@@ -127,7 +156,7 @@ bool FeatureInitializer::triangulate_feature(feature& feat) {
         // Get the state ID
         size_t i = feat.leftstateids.at(m);
         // DEBUG: Check that we are only using camera poses we have estimates for
-        if(!values.exists(X(i))) {
+        if(!values.exists(X(i)) && !values.exists(Y(i))) {
             ROS_ERROR("TRYING TO TRIANGULATE FEATURE WITH MARGINALIZED POSE....");
         }
         // Get the position of this clone in the global
@@ -158,7 +187,7 @@ bool FeatureInitializer::triangulate_feature(feature& feat) {
         // Get the state ID
         size_t i = feat.rightstateids.at(m);
         // DEBUG: Check that we are only using camera poses we have estimates for
-        if(!values.exists(X(i))) {
+        if(!values.exists(X(i)) && !values.exists(Y(i))) {
             ROS_ERROR("TRYING TO TRIANGULATE FEATURE WITH MARGINALIZED POSE....");
         }
         // Get the position of this clone in the global
