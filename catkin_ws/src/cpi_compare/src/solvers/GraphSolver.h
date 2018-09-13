@@ -255,7 +255,7 @@ public:
 
 
     /// Returns the currently tracked features
-    /*std::vector<Eigen::Vector3d> getcurrentfeaturesFORSTER2() {
+    std::vector<Eigen::Vector3d> getcurrentfeaturesFORSTER2() {
         // Return if we do not have any nodes yet
         if(values_initialFORSTER2.empty()) {
             return std::vector<Eigen::Vector3d>();
@@ -276,17 +276,15 @@ public:
             if(!values_initialFORSTER2.exists(Y(measurement_anchor_lookup[i])))
                 continue;
             // Transform back into the global frame!
-            Pose3 state = values_initialFORSTER2.at<gtsam::Pose3>(Y(measurement_anchor_lookup[i]));
-            Eigen::Vector3d abr = values_initialFORSTER.at<Point3>(F(i));
+            Pose3 state = values_initialFORSTER2.at<Pose3>(Y(measurement_anchor_lookup[i]));
+            Eigen::Vector3d abr = values_initialFORSTER2.at<Point3>(F(i));
             Eigen::Vector3d p_FinA;
             p_FinA << abr(0)/abr(2), abr(1)/abr(2), 1/abr(2);
-
-            JPLQuaternion q(state.rotation.toQuaternion())
-            Eigen::Vector3d p_FinG = quat_2_Rot(state.q()).transpose()*p_FinA+state.p();
+            Eigen::Vector3d p_FinG = state.rotation().transpose()*p_FinA+state.translation();
             features.push_back(p_FinG);
         }
         return features;
-    }*/
+    }
 
 
 private:

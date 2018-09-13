@@ -621,6 +621,16 @@ void publish_FeatureCloud(double timestamp) {
         cloud3->push_back(pt);
     }
 
+    std::vector<Eigen::Vector3d> points4 = graphsolver->getcurrentfeaturesFORSTER2();
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud4(new pcl::PointCloud <pcl::PointXYZ>);
+    for(size_t i=0; i<points2.size(); i++) {
+        pcl::PointXYZ pt;
+        pt.x = points3.at(i)(0);
+        pt.y = points3.at(i)(1);
+        pt.z = points3.at(i)(2);
+        cloud4->push_back(pt);
+    }
+
     // Publish the downstampled cloud
     sensor_msgs::PointCloud2 msgOut;
     pcl::toROSMsg(*cloud, msgOut);
@@ -642,4 +652,10 @@ void publish_FeatureCloud(double timestamp) {
     msgOut3.header.stamp = ros::Time(timestamp);
     pubFeatureCloudsFORSTER.publish(msgOut3);
 
+    // Publish the downstampled cloud
+    sensor_msgs::PointCloud2 msgOut4;
+    pcl::toROSMsg(*cloud4, msgOut4);
+    msgOut4.header.frame_id = "global";
+    msgOut4.header.stamp = ros::Time(timestamp);
+    pubFeatureCloudsFORSTER2.publish(msgOut3);
 }

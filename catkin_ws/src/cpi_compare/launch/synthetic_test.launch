@@ -1,5 +1,11 @@
+<?xml version="1.0"?>
 <launch>
 
+    <!-- ARGS -->
+    <arg name="rvizfile" default="$(find cpi_compare)/launch/synthetic_test.rviz" />
+    
+    <!-- RVIZ -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rvizfile)"/>
 
     <!-- MASTER NODE! -->
     <node name="cpi_compare" pkg="cpi_compare" type="estimator" output="screen" clear_params="true" required="true">
