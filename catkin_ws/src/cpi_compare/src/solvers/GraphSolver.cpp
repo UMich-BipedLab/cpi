@@ -122,12 +122,14 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         graphMODEL2->add(imuFactorMODEL2);
 
         // Forster discrete preintegration
-        ImuFactorCPIv1 imuFactorFORSTER = createimufactor_discrete(timestamp, values_initialFORSTER);
+        //ImuFactorCPIv1 imuFactorFORSTER = createimufactor_discrete(timestamp, values_initialFORSTER);
         imu_times = imu_timestemp;
         imu_linaccs = imu_linaccstemp;
         imu_angvel = imu_angveltemp;
-        graph_newFORSTER->add(imuFactorFORSTER);
-        graphFORSTER->add(imuFactorFORSTER);
+        //graph_newFORSTER->add(imuFactorFORSTER);
+        //graphFORSTER->add(imuFactorFORSTER);
+        graph_newFORSTER->add(imuFactorMODEL1);
+        graphFORSTER->add(imuFactorMODEL1);
 
         // Forster2 discrete preintegration
         PreintegratedCombinedMeasurements* preint_gtsam;
@@ -153,11 +155,40 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         // Original models
         JPLNavState newstateMODEL1 = getpredictedstate_v1(imuFactorMODEL1, values_initialMODEL1);
         JPLNavState newstateMODEL2 = getpredictedstate_v2(imuFactorMODEL2, values_initialMODEL2);
-        JPLNavState newstateFORSTER = getpredictedstate_v1(imuFactorFORSTER, values_initialFORSTER);
+        //JPLNavState newstateFORSTER = getpredictedstate_v1(imuFactorFORSTER, values_initialFORSTER);
+        JPLNavState newstateFORSTER = getpredictedstate_v1(imuFactorMODEL1, values_initialFORSTER);
         NavState newstateFORSTER2 = getpredictedstate_discrete(preint_gtsam, values_initialFORSTER2);
         imuBias::ConstantBias newbiasFORSTER2 = values_initialFORSTER2.at<imuBias::ConstantBias>(B(ct_state));
+	      gtsam::Pose3 newposeFORSTER2 = newstateFORSTER2.pose();
 
+
+        //==========================================================================
+        // Ground Truth Initialization
+        //==========================================================================
        
+        // If we have ground truth (like from simulation, then use that)
+        // NOTE: We use ground truth poses to set initial values
+        if(!true_times.empty() && config->useGroundTruthInitValues) {
+          JPLQuaternion q_GtoI = true_qGtoI.at(true_qGtoI.size()-1);
+          Vector3 p_IinG = true_pIinG.at(true_pIinG.size()-1);
+          Bias3 ba = Bias3(0.002899, 0.000054, -0.000197);
+          Bias3 bg = Bias3(-0.00000, 0.00002, -0.00002);
+
+          newstateMODEL1.set_q(q_GtoI);
+          newstateMODEL1.set_p(p_IinG);
+          //newstateMODEL1.set_ba(ba);
+          //newstateMODEL1.set_bg(bg);
+          newstateMODEL2.set_q(q_GtoI);
+          newstateMODEL2.set_p(p_IinG);
+          //newstateMODEL2.set_ba(ba);
+          //newstateMODEL2.set_bg(bg);
+          newstateFORSTER.set_q(q_GtoI);
+          newstateFORSTER.set_p(p_IinG);
+          //newstateFORSTER.set_ba(ba);
+          //newstateFORSTER.set_bg(bg);
+          newposeFORSTER2 = gtsam::Pose3(gtsam::Quaternion(q_GtoI(3), q_GtoI(0), q_GtoI(1), q_GtoI(2)), gtsam::Point3(p_IinG));
+        }
+
         // Debug print
         /*cout << "=======================================================" << endl;
         cout << "MODEL 1: " << endl << newstateMODEL1 << endl;
@@ -177,14 +208,14 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         values_newMODEL1.insert(X(ct_state), newstateMODEL1);
         values_newMODEL2.insert(X(ct_state), newstateMODEL2);
         values_newFORSTER.insert(X(ct_state), newstateFORSTER);
-        values_newFORSTER2.insert(Y(ct_state), newstateFORSTER2.pose());
+        values_newFORSTER2.insert(Y(ct_state), newposeFORSTER2);
         values_newFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
         values_newFORSTER2.insert(B(ct_state), newbiasFORSTER2);
 
         values_initialMODEL1.insert(X(ct_state), newstateMODEL1);
         values_initialMODEL2.insert(X(ct_state), newstateMODEL2);
         values_initialFORSTER.insert(X(ct_state), newstateFORSTER);
-        values_initialFORSTER2.insert(Y(ct_state), newstateFORSTER2.pose());
+        values_initialFORSTER2.insert(Y(ct_state), newposeFORSTER2);
         values_initialFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
         values_initialFORSTER2.insert(B(ct_state), newbiasFORSTER2);
 
@@ -294,6 +325,152 @@ void GraphSolver::optimize() {
 }
 
 
+void GraphSolver::optimizeLM() {
+
+    // Return if not initialized
+    if(!systeminitalized || ct_state < 300)
+        return;
+
+    // Start our timer
+    boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
+
+    // Perform smoothing update
+    try {
+      cout << "initial error = " << graphMODEL1->error(values_initialMODEL1) << endl;
+      LevenbergMarquardtOptimizer optimizer(*graphMODEL1, values_initialMODEL1);
+      values_initialMODEL1 = optimizer.optimize();
+      cout << "final error = " << graphMODEL1->error(values_initialMODEL1) << endl;
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("CPI MODEL 1 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Perform smoothing update
+    try {
+      cout << "initial error = " << graphMODEL2->error(values_initialMODEL2) << endl;
+      LevenbergMarquardtOptimizer optimizer(*graphMODEL2, values_initialMODEL2);
+      values_initialMODEL2 = optimizer.optimize();
+      cout << "final error = " << graphMODEL2->error(values_initialMODEL2) << endl;
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("CPI MODEL 2 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Perform smoothing update
+    try {
+      cout << "initial error = " << graphFORSTER->error(values_initialFORSTER) << endl;
+      LevenbergMarquardtOptimizer optimizer(*graphFORSTER, values_initialFORSTER);
+      values_initialFORSTER = optimizer.optimize();
+      cout << "final error = " << graphFORSTER->error(values_initialFORSTER) << endl;
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("FORSTER gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Perform smoothing update
+    try {
+      cout << "initial error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
+      LevenbergMarquardtOptimizer optimizer(*graphFORSTER2, values_initialFORSTER2);
+      values_initialFORSTER2 = optimizer.optimize();
+      cout << "final error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("FORSTER2 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Debug print time
+    boost::posix_time::ptime t2(boost::posix_time::microsec_clock::local_time());
+    ROS_INFO("[GRAPH]: %d states | %d features | %d edges [%.5f seconds to optimize]",(int)ct_state+1,(int)ct_features,(int)graphMODEL1->size(),(t2-t1).total_microseconds()*1e-6);
+}
+
+
+void GraphSolver::optimizeISAM2() {
+
+    // Return if not initialized
+    if(!systeminitalized && ct_state < 2)
+        return;
+
+    // Start our timer
+    boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
+
+    // Perform smoothing update
+    /*try {
+        isam2MODEL1->update(*graph_newMODEL1, values_newMODEL1);
+        isam2MODEL1->update();
+        isam2MODEL1->update();
+        values_initialMODEL1 = isam2MODEL1->calculateEstimate();
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("CPI MODEL 1 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Perform smoothing update
+    try {
+        isam2MODEL2->update(*graph_newMODEL2, values_newMODEL2);
+        isam2MODEL2->update();
+        isam2MODEL2->update();
+        values_initialMODEL2 = isam2MODEL2->calculateEstimate();
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("CPI MODEL 2 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Perform smoothing update
+    try {
+        isam2FORSTER->update(*graph_newFORSTER, values_newFORSTER);
+        isam2FORSTER->update();
+        isam2FORSTER->update();
+        values_initialFORSTER = isam2FORSTER->calculateEstimate();
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("FORSTER gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }*/
+    
+    // Perform smoothing update
+    try {
+      cout << "initial error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
+      isam2FORSTER2->update(*graph_newFORSTER2, values_newFORSTER2);
+        isam2FORSTER2->update();
+        //isam2FORSTER2->update();
+        values_initialFORSTER2 = isam2FORSTER2->calculateEstimate();
+      cout << "final error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
+    } catch(gtsam::IndeterminantLinearSystemException &e) {
+        ROS_ERROR("FORSTER2 gtsam indeterminate linear system exception!");
+        cerr << e.what() << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // Remove the used up nodes
+    values_newMODEL1.clear();
+    values_newMODEL2.clear();
+    values_newFORSTER.clear();
+    values_newFORSTER2.clear();
+
+    // Clear used timestamps
+    newTimestampsMODEL1.clear();
+    newTimestampsMODEL2.clear();
+    newTimestampsFORSTER.clear();
+    newTimestampsFORSTER2.clear();
+
+    // Remove the used up factors
+    graph_newMODEL1->resize(0);
+    graph_newMODEL2->resize(0);
+    graph_newFORSTER->resize(0);
+    graph_newFORSTER2->resize(0);
+
+    // Debug print time
+    boost::posix_time::ptime t2(boost::posix_time::microsec_clock::local_time());
+    ROS_INFO("[GRAPH]: %d states | %d features | %d edges [%.5f seconds to optimize]",(int)ct_state+1,(int)ct_features,(int)graph_newMODEL1->size(),(t2-t1).total_microseconds()*1e-6);
+}
+
+
 /**
  * This will try to take the current IMU vector and initalize
  * If there are enough IMU, we should find the current orientation and biases
@@ -364,8 +541,10 @@ void GraphSolver::trytoinitalize(double timestamp) {
     if(!true_times.empty() && config->useGroundTruthInit) {
         q_GtoI = true_qGtoI.at(true_qGtoI.size()-1);
         p_IinG = true_pIinG.at(true_pIinG.size()-1);
-        bg = Bias3(0,0,0);
-        ba = Bias3(0,0,0);
+        //ba = Bias3(0.002899, 0.000054, -0.000197);
+        //bg = Bias3(0.00000, 0.00002, -0.00002);
+        ba = Bias3(0.0, 0.0, 0.0);
+        bg = Bias3(0.0, 0.0, 0.0);
     }
 
     // Since this is the true pose, lets just assign a small error
@@ -389,9 +568,9 @@ void GraphSolver::trytoinitalize(double timestamp) {
     gtsam::Pose3 prior_pose = gtsam::Pose3(gtsam::Quaternion(q_GtoI(3), q_GtoI(0), q_GtoI(1), q_GtoI(2)), gtsam::Point3(p_IinG));
     imuBias::ConstantBias prior_imu_bias;
     
-    noiseModel::Diagonal::shared_ptr pose_noise_model = noiseModel::Diagonal::Sigmas((Vector(6) << 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4).finished());
-    noiseModel::Diagonal::shared_ptr velocity_noise_model = noiseModel::Isotropic::Sigma(3, 1e-4);
-    noiseModel::Diagonal::shared_ptr bias_noise_model = noiseModel::Isotropic::Sigma(6, 1e-4);
+    noiseModel::Diagonal::shared_ptr pose_noise_model = noiseModel::Diagonal::Sigmas((Vector(6) << 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1).finished());
+    noiseModel::Diagonal::shared_ptr velocity_noise_model = noiseModel::Isotropic::Sigma(3, 1e-2);
+    noiseModel::Diagonal::shared_ptr bias_noise_model = noiseModel::Isotropic::Sigma(6, config->sigma_wa);
 
     graph_newFORSTER2->add(PriorFactor<Pose3>(Y(ct_state), prior_pose, pose_noise_model));
     graph_newFORSTER2->add(PriorFactor<Vector3>(V(ct_state), v_IinG, velocity_noise_model));

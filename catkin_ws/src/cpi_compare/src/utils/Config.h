@@ -57,6 +57,9 @@ public:
     /// If we should use the groundtruth to initialize
     bool useGroundTruthInit;
 
+    /// If we should use the groundtruth to initialize values
+    bool useGroundTruthInitValues;
+
     // Rates
     int imuRate;
     int camRate;

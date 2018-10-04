@@ -87,6 +87,27 @@ namespace gtsam {
         JPLNavState(const JPLQuaternion& q, const Bias3& bgi, const Velocity3& v, const Bias3& bai, const Vector3& p) :
                 q_GtoI(q), biasg(bgi), v_IinG(v), biasa(bai), p_IinG(p) { }
 
+
+      	/// Set rotation quaternion.
+        void set_q(JPLQuaternion& q) {
+          this->q_GtoI = q;
+        }
+        
+        /// Set position
+        void set_p(Vector3& p) {
+          this->p_IinG = p;
+        }
+
+	/// Set ba
+	void set_ba(Bias3& ba) {
+	  this->biasa = ba;
+	}
+
+	/// Set bg
+	void set_bg(Bias3& bg) {
+	  this->biasg = bg;
+	}
+
         /// Return rotation quaternion.
         JPLQuaternion q() const {
             return q_GtoI;

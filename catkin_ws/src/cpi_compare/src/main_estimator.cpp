@@ -63,6 +63,8 @@ void publish_JPLstate(double timestamp, JPLNavState& state, Eigen::Matrix<double
 void publish_GTSAMstate(double timestamp, gtsam::Pose3& state, Eigen::Matrix<double, 6, 6>& covariance,
                       ros::Publisher& pubPath, ros::Publisher& pubPoseIMU, vector<geometry_msgs::PoseStamped>& poses_est);
 void publish_FeatureCloud(double timestamp);
+void publish_JPLtrajectory(double timestamp, vector<JPLNavState>& trajectory, ros::Publisher& pubPath);
+void publish_GTSAMtrajectory(double timestamp, vector<gtsam::Pose3>& trajectory, ros::Publisher& pubPath);
 
 
 // Subscribers and publishers
@@ -74,6 +76,10 @@ ros::Publisher pubPathMODEL1;
 ros::Publisher pubPathMODEL2;
 ros::Publisher pubPathFORSTER;
 ros::Publisher pubPathFORSTER2;
+ros::Publisher pubTrajMODEL1;
+ros::Publisher pubTrajMODEL2;
+ros::Publisher pubTrajFORSTER;
+ros::Publisher pubTrajFORSTER2;
 ros::Publisher pubPoseIMUMODEL1;
 ros::Publisher pubPoseIMUMODEL2;
 ros::Publisher pubPoseIMUFORSTER;
@@ -195,6 +201,7 @@ void setup_config(ros::NodeHandle& nh, Config* config) {
 
     // Load if we should inialize using the groundtruth pose
     nh.param<bool>("useGroundTruthInit", config->useGroundTruthInit, true);
+    nh.param<bool>("useGroundTruthInitValues", config->useGroundTruthInitValues, false);
 
     // Max window we should update uv coordinates by
     nh.param<int>("uvWindowSize", config->uvWindowSize, 25);
@@ -235,6 +242,7 @@ void setup_config(ros::NodeHandle& nh, Config* config) {
     cout << "\t- lag amount (s): " << config->lagSmootherAmount << endl;
     cout << "\t- inverse depth: " << std::boolalpha << config->useInverseDepth << endl;
     cout << "\t- groundtruth init: " << std::boolalpha << config->useGroundTruthInit << endl;
+    cout << "\t- groundtruth init values: " << std::boolalpha << config->useGroundTruthInitValues << endl;
 
 }
 
@@ -265,6 +273,17 @@ void setup_subpub(ros::NodeHandle& nh) {
     pubPathFORSTER = nh.advertise<nav_msgs::Path>("cpi_compare/path_imu_forster", 2);
     ROS_INFO("Publishing: %s", pubPathFORSTER.getTopic().c_str());
     pubPathFORSTER2 = nh.advertise<nav_msgs::Path>("cpi_compare/path_imu_forster2", 2);
+    ROS_INFO("Publishing: %s", pubPathFORSTER2.getTopic().c_str());
+   
+
+    // Trajectory visualization
+    pubTrajMODEL1 = nh.advertise<nav_msgs::Path>("cpi_compare/traj_imu_cpi1", 2);
+    ROS_INFO("Publishing: %s", pubPathMODEL1.getTopic().c_str());
+    pubTrajMODEL2 = nh.advertise<nav_msgs::Path>("cpi_compare/traj_imu_cpi2", 2);
+    ROS_INFO("Publishing: %s", pubPathMODEL2.getTopic().c_str());
+    pubTrajFORSTER = nh.advertise<nav_msgs::Path>("cpi_compare/traj_imu_forster", 2);
+    ROS_INFO("Publishing: %s", pubPathFORSTER.getTopic().c_str());
+    pubTrajFORSTER2 = nh.advertise<nav_msgs::Path>("cpi_compare/traj_imu_forster2", 2);
     ROS_INFO("Publishing: %s", pubPathFORSTER2.getTopic().c_str());
 
 
@@ -372,7 +391,7 @@ void handle_measurement_uv(cpi_comm::CameraMeasurement::Ptr msg) {
     //==========================================================================
 
     // Optimize the graph! GO GO GO!!!
-    graphsolver->optimize();
+    graphsolver->optimizeISAM2();
 
 
     //==========================================================================
@@ -385,24 +404,30 @@ void handle_measurement_uv(cpi_comm::CameraMeasurement::Ptr msg) {
     // CPI MODEL 1
     JPLNavState state = graphsolver->getcurrentstateMODEL1();
     publish_JPLstate(msg->header.stamp.toSec(),state,covariance,pubPathMODEL1,pubPoseIMUMODEL1,poses_estMODEL1);
+    vector<JPLNavState> trajectory = graphsolver->gettrajectoryMODEL1();
+    publish_JPLtrajectory(msg->header.stamp.toSec(), trajectory, pubTrajMODEL1);
 
     // CPI MODEL 2
     state = graphsolver->getcurrentstateMODEL2();
     publish_JPLstate(msg->header.stamp.toSec(),state,covariance,pubPathMODEL2,pubPoseIMUMODEL2,poses_estMODEL2);
+    trajectory = graphsolver->gettrajectoryMODEL2();
+    publish_JPLtrajectory(msg->header.stamp.toSec(), trajectory, pubTrajMODEL2);
 
     // FORSTER DISCRETE
     state = graphsolver->getcurrentstateFORSTER();
     publish_JPLstate(msg->header.stamp.toSec(),state,covariance,pubPathFORSTER,pubPoseIMUFORSTER,poses_estFORSTER);
+    trajectory = graphsolver->gettrajectoryFORSTER();
+    publish_JPLtrajectory(msg->header.stamp.toSec(), trajectory, pubTrajFORSTER);
 
     // FORSTER2 DISCRETE
     gtsam::Pose3 gtsam_state = graphsolver->getcurrentstateFORSTER2();
     publish_GTSAMstate(msg->header.stamp.toSec(), gtsam_state, covariance, pubPathFORSTER2, pubPoseIMUFORSTER2, poses_estFORSTER2);
+    vector<gtsam::Pose3> gtsam_trajectory = graphsolver->gettrajectoryFORSTER2();
+    publish_GTSAMtrajectory(msg->header.stamp.toSec(), gtsam_trajectory, pubTrajFORSTER2);
 
     // Publish our feature cloud
     publish_FeatureCloud(msg->header.stamp.toSec());
 }
-
-
 
 
 /**
@@ -485,10 +510,10 @@ void publish_JPLstate(double timestamp, JPLNavState& state, Eigen::Matrix<double
 
 
     // Debug print current position
-    ROS_INFO("[STATE]: q = %.4f, %.4f, %.4f, %.4f | v = %.2f, %.2f, %.2f | p = %.2f, %.2f, %.2f",
+    ROS_INFO("[STATE]: q = %.4f, %.4f, %.4f, %.4f | v = %.2f, %.2f, %.2f | p = %.2f, %.2f, %.2f | ba = %f, %f, %f | bg = %f, %f, %f",
              state.q()(0), state.q()(1), state.q()(2), state.q()(3), state.v()(0), state.v()(1),
-             state.v()(2), state.p()(0), state.p()(1), state.p()(2));
-
+             state.v()(2), state.p()(0), state.p()(1), state.p()(2),
+             state.ba()(0), state.ba()(1), state.ba()(2), state.bg()(0), state.bg()(1), state.bg()(2));
 }
 
 
@@ -577,7 +602,64 @@ void publish_GTSAMstate(double timestamp, gtsam::Pose3& state, Eigen::Matrix<dou
     ROS_INFO("[STATE]: q = %.4f, %.4f, %.4f, %.4f | v = %.2f, %.2f, %.2f | p = %.2f, %.2f, %.2f",
              pose.pose.pose.orientation.x, pose.pose.pose.orientation.y, pose.pose.pose.orientation.z, pose.pose.pose.orientation.w, 0.0, 0.0, 0.0,
              pose.pose.pose.position.x, pose.pose.pose.position.y, pose.pose.pose.position.z);
+}
 
+
+void publish_JPLtrajectory(double timestamp, vector<JPLNavState>& trajectory, ros::Publisher& pubPath) {
+  
+  if (trajectory.empty())
+    return;
+
+  vector<geometry_msgs::PoseStamped> traj_est;
+  for (auto it = trajectory.begin(); it != trajectory.end(); it++) {
+    JPLNavState state = *it;
+    // Create our stamped pose for path publishing
+    geometry_msgs::PoseStamped poseStamped;
+    poseStamped.header.stamp = ros::Time(timestamp);
+    poseStamped.header.frame_id = "global";
+    poseStamped.pose.orientation.x = state.q()(0);
+    poseStamped.pose.orientation.y = state.q()(1);
+    poseStamped.pose.orientation.z = state.q()(2);
+    poseStamped.pose.orientation.w = state.q()(3);
+    poseStamped.pose.position.x = state.p()(0);
+    poseStamped.pose.position.y = state.p()(1);
+    poseStamped.pose.position.z = state.p()(2);
+    traj_est.push_back(poseStamped);
+  } 
+  
+  // Create pose arrays and publish
+  nav_msgs::Path patharr;
+  patharr.header.stamp = ros::Time(timestamp);
+  patharr.header.seq = poses_seq++;
+  patharr.header.frame_id = "global";
+  patharr.poses = traj_est;
+  pubPath.publish(patharr);
+}
+
+
+void publish_GTSAMtrajectory(double timestamp, vector<gtsam::Pose3>& trajectory, ros::Publisher& pubPath) {
+  
+  if (trajectory.empty())
+    return;
+
+  vector<geometry_msgs::PoseStamped> traj_est;
+  for (auto it = trajectory.begin(); it != trajectory.end(); it++) {
+    gtsam::Pose3 state = *it;
+    // Create our stamped pose for path publishing
+    geometry_msgs::PoseStamped poseStamped;
+    poseStamped.header.stamp = ros::Time(timestamp);
+    poseStamped.header.frame_id = "global";
+    common::gtsam_ros_utils::GtsamToRosPose3(state, poseStamped.pose);
+    traj_est.push_back(poseStamped);
+  } 
+  
+  // Create pose arrays and publish
+  nav_msgs::Path patharr;
+  patharr.header.stamp = ros::Time(timestamp);
+  patharr.header.seq = poses_seq++;
+  patharr.header.frame_id = "global";
+  patharr.poses = traj_est;
+  pubPath.publish(patharr);
 }
 
 

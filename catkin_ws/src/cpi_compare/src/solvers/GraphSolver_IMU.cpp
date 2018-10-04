@@ -138,7 +138,7 @@ ImuFactorCPIv2 GraphSolver::createimufactor_cpi_v2(double updatetime, gtsam::Val
  * This function will create a discrete IMU factor using the GTSAM preintegrator class
  * This will integrate from the current state time up to the new update time
  */
-ImuFactorCPIv1 GraphSolver::createimufactor_discrete(double updatetime, gtsam::Values& values_initial) {
+/*ImuFactorCPIv1 GraphSolver::createimufactor_discrete(double updatetime, gtsam::Values& values_initial) {
 
     // Get the current state and its bias estimate
     JPLNavState stateK = values_initial.at<JPLNavState>(X(ct_state));
@@ -230,7 +230,7 @@ ImuFactorCPIv1 GraphSolver::createimufactor_discrete(double updatetime, gtsam::V
                           alpha,beta,rot_2_quat(kplus_R_k),ba_K,bg_K,J_q,
                           Beta_Jacob_Gyro,Alpha_Jacob_Gyro,Beta_Jacob_Accel,Alpha_Jacob_Accel);
 
-}
+}*/
 
 
 /**

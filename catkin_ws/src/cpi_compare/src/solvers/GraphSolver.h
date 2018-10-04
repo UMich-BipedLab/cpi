@@ -109,6 +109,17 @@ public:
         this->smootherBatchFORSTER = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
         this->smootherBatchFORSTER2 = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
 
+        // ISAM2 solver
+        ISAM2Params isam_params;
+        isam_params.optimizationParams = ISAM2DoglegParams();
+        isam_params.factorization = ISAM2Params::QR;
+        isam_params.relinearizeSkip = 1;
+        isam_params.relinearizeThreshold = 0.01;
+     
+        this->isam2MODEL1 = new ISAM2(isam_params);
+        this->isam2MODEL2 = new ISAM2(isam_params);
+        this->isam2FORSTER = new ISAM2(isam_params);
+        this->isam2FORSTER2 = new ISAM2(isam_params);
     }
 
     /// Function that takes in IMU measurements for use in preintegration measurements
@@ -123,6 +134,8 @@ public:
 
     /// This function will optimize the graph
     void optimize();
+    void optimizeLM();
+    void optimizeISAM2();
 
     /// Will return true if the system is initialized
     bool is_initialized() {
@@ -154,8 +167,75 @@ public:
     gtsam::Pose3 getcurrentstateFORSTER2() {
         if(values_initialFORSTER2.empty())
             return gtsam::Pose3();
+        std::cout << values_initialFORSTER2.at<gtsam::imuBias::ConstantBias>(B(ct_state)) << std::endl;
         return values_initialFORSTER2.at<gtsam::Pose3>(Y(ct_state));
     }
+
+
+    std::vector<JPLNavState> gettrajectoryMODEL1() {
+      // Return if we do not have any nodes yet
+      if (values_initialMODEL1.empty())
+        return std::vector<JPLNavState>();
+      // Our vector of poses in the global
+      std::vector<JPLNavState> trajectory;
+      // Else loop through the states and return them
+      for (size_t i=1; i<=ct_state; i++) {
+        // Ensure valid states
+        if (!values_initialMODEL1.exists(X(i)))
+          continue;
+        trajectory.push_back(values_initialMODEL1.at<JPLNavState>(X(i)));
+      }
+      return trajectory;
+    }
+
+    std::vector<JPLNavState> gettrajectoryMODEL2() {
+      // Return if we do not have any nodes yet
+      if (values_initialMODEL2.empty())
+        return std::vector<JPLNavState>();
+      // Our vector of poses in the global
+      std::vector<JPLNavState> trajectory;
+      // Else loop through the states and return them
+      for (size_t i=1; i<=ct_state; i++) {
+        // Ensure valid states
+        if (!values_initialMODEL2.exists(X(i)))
+          continue;
+        trajectory.push_back(values_initialMODEL2.at<JPLNavState>(X(i)));
+      }
+      return trajectory;
+    }
+
+    std::vector<JPLNavState> gettrajectoryFORSTER() {
+      // Return if we do not have any nodes yet
+      if (values_initialFORSTER.empty())
+        return std::vector<JPLNavState>();
+      // Our vector of poses in the global
+      std::vector<JPLNavState> trajectory;
+      // Else loop through the states and return them
+      for (size_t i=1; i<=ct_state; i++) {
+        // Ensure valid states
+        if (!values_initialFORSTER.exists(X(i)))
+          continue;
+        trajectory.push_back(values_initialFORSTER.at<JPLNavState>(X(i)));
+      }
+      return trajectory;
+    }
+
+    std::vector<gtsam::Pose3> gettrajectoryFORSTER2() {
+      // Return if we do not have any nodes yet
+      if (values_initialFORSTER2.empty())
+        return std::vector<gtsam::Pose3>();
+      // Our vector of poses in the global
+      std::vector<gtsam::Pose3> trajectory;
+      // Else loop through the states and return them
+      for (size_t i=1; i<=ct_state; i++) {
+        // Ensure valid states
+        if (!values_initialFORSTER2.exists(Y(i)))
+          continue;
+        trajectory.push_back(values_initialFORSTER2.at<gtsam::Pose3>(Y(i)));
+      }
+      return trajectory;
+    }
+
 
     /// Returns the currently tracked features
     std::vector<Eigen::Vector3d> getcurrentfeaturesMODEL1() {
@@ -346,6 +426,12 @@ private:
     FixedLagSmoother::KeyTimestampMap newTimestampsMODEL2;
     FixedLagSmoother::KeyTimestampMap newTimestampsFORSTER;
     FixedLagSmoother::KeyTimestampMap newTimestampsFORSTER2;
+
+    // ISAM2 solvers
+    ISAM2* isam2MODEL1;
+    ISAM2* isam2MODEL2;
+    ISAM2* isam2FORSTER;
+    ISAM2* isam2FORSTER2;
 
     // Current ID of state and features
     size_t ct_state = 0;
