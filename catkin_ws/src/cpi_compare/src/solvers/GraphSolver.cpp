@@ -398,7 +398,7 @@ void GraphSolver::optimizeISAM2() {
     boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
 
     // Perform smoothing update
-    /*try {
+    try {
         isam2MODEL1->update(*graph_newMODEL1, values_newMODEL1);
         isam2MODEL1->update();
         isam2MODEL1->update();
@@ -431,7 +431,7 @@ void GraphSolver::optimizeISAM2() {
         ROS_ERROR("FORSTER gtsam indeterminate linear system exception!");
         cerr << e.what() << endl;
         exit(EXIT_FAILURE);
-    }*/
+    }
     
     // Perform smoothing update
     try {
