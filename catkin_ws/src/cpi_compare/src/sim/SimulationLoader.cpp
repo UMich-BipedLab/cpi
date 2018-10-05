@@ -302,8 +302,8 @@ void SimulationLoader::execute_publishing(void (*f_truth)(geometry_msgs::PoseSta
         //loop_rate.sleep();
 
     }
-
+    
+    std::cout << "Simulation Finished."<< std::endl;
 }
-
 
 
