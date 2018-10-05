@@ -50,11 +50,8 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
 
-            // Add projection factor to FORSTER2 model
-            Cal3_S2::shared_ptr K(new Cal3_S2());
-            noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
-            graphFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(leftuv.at(i)), measurementNoise, Y(ct_state), F(measurement_lookup[leftids.at(i)]), K);
-            graph_newFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(leftuv.at(i)), measurementNoise, Y(ct_state), F(measurement_lookup[leftids.at(i)]), K);
+            // Insert measurements to a smart factor
+            measurement_smart_lookup_left[leftids.at(i)]->add(Point2(leftuv.at(i)), Y(ct_state));
             continue;
         }
         // Next check to see if this feature is in our queue
@@ -89,12 +86,8 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
 
-            // Add projection factor to FORSTER2 model
-            Cal3_S2::shared_ptr K(new Cal3_S2());
-            noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
-            Pose3 sensor_P_body = Pose3(Rot3(config->R_C1toI), Point3(config->p_IinC1));
-            graphFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(rightuv.at(i)), measurementNoise, Y(ct_state), F(measurement_lookup[rightids.at(i)]), K, sensor_P_body.inverse());
-            graph_newFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(rightuv.at(i)), measurementNoise, Y(ct_state), F(measurement_lookup[rightids.at(i)]), K, sensor_P_body.inverse());
+            // Insert measurements to a smart factor
+            measurement_smart_lookup_right[rightids.at(i)]->add(Point2(rightuv.at(i)), Y(ct_state));
             continue;
         }
         // Check to see if this feature is in our queue
@@ -198,13 +191,18 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         values_initialMODEL1.insert(F(ct_features), gtsam::Point3(measurementMODEL1.second.pos_FinG));
         values_initialMODEL2.insert(F(ct_features), gtsam::Point3(measurementMODEL2.second.pos_FinG));
         values_initialFORSTER.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
-        values_initialFORSTER2.insert(F(ct_features), gtsam::Point3(measurementFORSTER2.second.pos_FinG));
         
         // Append to our fix lag smoother timestamps
         newTimestampsMODEL1[F(ct_features)] = timestamp;
         newTimestampsMODEL2[F(ct_features)] = timestamp;
         newTimestampsFORSTER[F(ct_features)] = timestamp;
         newTimestampsFORSTER2[F(ct_features)] = timestamp;
+
+        // create a smart factor for the new feature
+        noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
+        Cal3_S2::shared_ptr K(new Cal3_S2());
+        SmartFactor::shared_ptr smartfactor_left(new SmartFactor(measurementNoise, K));
+        measurement_smart_lookup_left[measurement.first] = smartfactor_left;
 
         // Next lets add all LEFT factors (all graphs have the same measurements!!!)
         for(size_t j=0; j<measurementMODEL1.second.leftuv.size(); j++) {
@@ -217,13 +215,19 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
             
-            // Add projection factor to FORSTER2 model
-            Cal3_S2::shared_ptr K(new Cal3_S2());
-            noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
-            graphFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(measurementMODEL1.second.leftuv.at(j)), measurementNoise, Y(measurementMODEL1.second.leftstateids.at(j)), F(ct_features), K);
-            graph_newFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(measurementMODEL1.second.leftuv.at(j)), measurementNoise, Y(measurementMODEL1.second.leftstateids.at(j)), F(ct_features), K);
+            // Insert measurements to a smart factor
+            smartfactor_left->add(Point2(measurementMODEL1.second.leftuv.at(j)), Y(measurementMODEL1.second.leftstateids.at(j)));
         }
 
+        // Add smart factor to FORSTER2 model
+        graphFORSTER2->push_back(smartfactor_left);
+        graph_newFORSTER2->push_back(smartfactor_left);
+
+        // create a smart factor for the new feature
+        Pose3 sensor_P_body = Pose3(Rot3(config->R_C1toI), Point3(config->p_IinC1));
+        SmartFactor::shared_ptr smartfactor_right(new SmartFactor(measurementNoise, K, sensor_P_body.inverse()));
+        measurement_smart_lookup_right[measurement.first] = smartfactor_right;
+        
         // Next lets add all RIGHT factors (all graphs have the same measurements!!!)
         for(size_t j=0; j<measurementMODEL1.second.rightuv.size(); j++) {
             Eigen::Matrix<double,2,2> sqrtQ = config->sigma_camera_sq*Eigen::Matrix<double,2,2>::Identity();
@@ -235,13 +239,13 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
 
-            // Add projection factor to FORSTER2 model
-            Cal3_S2::shared_ptr K(new Cal3_S2());
-            noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
-            Pose3 sensor_P_body = Pose3(Rot3(config->R_C1toI), Point3(config->p_IinC1));
-            graphFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(measurementMODEL1.second.rightuv.at(j)), measurementNoise, Y(measurementMODEL1.second.rightstateids.at(j)), F(ct_features), K, sensor_P_body.inverse());
-            graph_newFORSTER2->emplace_shared<GenericProjectionFactor<Pose3, Point3, Cal3_S2> >(Point2(measurementMODEL1.second.rightuv.at(j)), measurementNoise, Y(measurementMODEL1.second.rightstateids.at(j)), F(ct_features), K, sensor_P_body.inverse());
+            // Insert measurements to a smart factor
+            smartfactor_right->add(Point2(measurementMODEL1.second.rightuv.at(j)), Y(measurementMODEL1.second.rightstateids.at(j)));
         }
+
+        // Add smart factor to FORSTER2 model
+        graphFORSTER2->push_back(smartfactor_left);
+        graph_newFORSTER2->push_back(smartfactor_left);
 
         // Record our success
         ct_successes++;

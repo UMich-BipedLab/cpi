@@ -328,7 +328,7 @@ void GraphSolver::optimize() {
 void GraphSolver::optimizeLM() {
 
     // Return if not initialized
-    if(!systeminitalized || ct_state < 300)
+    if(!systeminitalized || ct_state < 587)
         return;
 
     // Start our timer

@@ -66,9 +66,7 @@
 
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/slam/ProjectionFactor.h>
-#include "gtsam_backend/gtsam_solver.h"
-#include "gtsam_backend/imu_preintegration.h"
-#include "gtsam_backend/visual_odometry.h"
+#include <gtsam/slam/SmartProjectionPoseFactor.h>
 
 using namespace std;
 using namespace gtsam;
@@ -81,6 +79,7 @@ using gtsam::symbol_shorthand::Y; // Pose3 (x,y,z,r,p,y)
 using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 
+typedef SmartProjectionPoseFactor<Cal3_S2> SmartFactor;
 
 class GraphSolver {
 public:
@@ -477,7 +476,8 @@ private:
     std::unordered_map<int, size_t> measurement_state_lookup; //< state ID of feature if added into graph
     std::unordered_map<size_t, size_t> measurement_anchor_lookup; //< state ID of anchor pose based on feature ID
     std::unordered_map<int, feature> measurement_queue; //< queue of features that have not been added
-
+    std::unordered_map<int, SmartFactor::shared_ptr> measurement_smart_lookup_left;
+    std::unordered_map<int, SmartFactor::shared_ptr> measurement_smart_lookup_right;
 
 };
 
