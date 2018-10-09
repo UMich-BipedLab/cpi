@@ -67,6 +67,7 @@
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/slam/ProjectionFactor.h>
 #include <gtsam/slam/SmartProjectionPoseFactor.h>
+#include <gtsam_unstable/slam/SmartStereoProjectionPoseFactor.h>
 
 using namespace std;
 using namespace gtsam;
@@ -80,6 +81,7 @@ using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 
 typedef SmartProjectionPoseFactor<Cal3_S2> SmartFactor;
+typedef SmartStereoProjectionPoseFactor SmartStereoFactor;
 
 class GraphSolver {
 public:
@@ -119,6 +121,8 @@ public:
         this->isam2MODEL2 = new ISAM2(isam_params);
         this->isam2FORSTER = new ISAM2(isam_params);
         this->isam2FORSTER2 = new ISAM2(isam_params);
+
+        //smartfactor_params.setRankTolerance(0);
     }
 
     /// Function that takes in IMU measurements for use in preintegration measurements
@@ -432,6 +436,9 @@ private:
     ISAM2* isam2FORSTER;
     ISAM2* isam2FORSTER2;
 
+    // Smart factor
+    //SmartFactorParams smartfactor_params;
+
     // Current ID of state and features
     size_t ct_state = 0;
     size_t ct_features = 0;
@@ -478,7 +485,7 @@ private:
     std::unordered_map<int, feature> measurement_queue; //< queue of features that have not been added
     std::unordered_map<int, SmartFactor::shared_ptr> measurement_smart_lookup_left;
     std::unordered_map<int, SmartFactor::shared_ptr> measurement_smart_lookup_right;
-
+    std::unordered_map<int, SmartStereoFactor::shared_ptr> measurement_smart_lookup_stereo;
 };
 
 

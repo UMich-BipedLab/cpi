@@ -328,7 +328,7 @@ void GraphSolver::optimize() {
 void GraphSolver::optimizeLM() {
 
     // Return if not initialized
-    if(!systeminitalized || ct_state < 587)
+    if(!systeminitalized || ct_state < 10)
         return;
 
     // Start our timer
@@ -371,6 +371,9 @@ void GraphSolver::optimizeLM() {
     }
 
     // Perform smoothing update
+    for (auto it : measurement_smart_lookup_stereo) {
+      graphFORSTER2->add(it.second);
+    }
     try {
       cout << "initial error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
       LevenbergMarquardtOptimizer optimizer(*graphFORSTER2, values_initialFORSTER2);

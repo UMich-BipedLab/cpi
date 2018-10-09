@@ -19,7 +19,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * OUT OF OR IN CONNECTION iWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
 
@@ -51,7 +51,7 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newFORSTER->add(factor);
 
             // Insert measurements to a smart factor
-            measurement_smart_lookup_left[leftids.at(i)]->add(Point2(leftuv.at(i)), Y(ct_state));
+            //measurement_smart_lookup_left[leftids.at(i)]->add(Point2(leftuv.at(i)), Y(ct_state));
             continue;
         }
         // Next check to see if this feature is in our queue
@@ -87,8 +87,16 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newFORSTER->add(factor);
 
             // Insert measurements to a smart factor
-            measurement_smart_lookup_right[rightids.at(i)]->add(Point2(rightuv.at(i)), Y(ct_state));
-            continue;
+           //measurement_sma  rt_lookup_right[rightids.at(i)]->add(Point2(rightuv.at(i)), Y(ct_state));
+            auto pos = std::find(leftids.begin(), leftids.end(), rightids.at(i));
+            if (pos != leftids.end()) { // We know that the same landmark is seen by both left and right cameras
+              Cal3_S2Stereo::shared_ptr K(new Cal3_S2Stereo(1, 1, 0, 0, 0, 0.1));
+              measurement_smart_lookup_stereo[rightids.at(i)]->add(StereoPoint2(leftuv.at(pos-leftids.begin())[0], rightuv.at(i)[0], rightuv.at(i)[1]), Y(ct_state), K);
+              std::cout << measurement_smart_lookup_stereo[rightids.at(i)]->isValid() << std::endl;
+              measurement_smart_lookup_stereo[rightids.at(i)]->print();
+
+            }
+           continue;
         }
         // Check to see if this feature is in our queue
         // We know this is in our queue, so lets add this new measurement to it
@@ -198,11 +206,12 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         newTimestampsFORSTER[F(ct_features)] = timestamp;
         newTimestampsFORSTER2[F(ct_features)] = timestamp;
 
-        // create a smart factor for the new feature
-        noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(2, config->sigma_camera);
-        Cal3_S2::shared_ptr K(new Cal3_S2());
-        SmartFactor::shared_ptr smartfactor_left(new SmartFactor(measurementNoise, K));
-        measurement_smart_lookup_left[measurement.first] = smartfactor_left;
+        // create a smart stereo factor for the new feature
+        noiseModel::Isotropic::shared_ptr measurementNoise = noiseModel::Isotropic::Sigma(3, 0.1);
+        Cal3_S2Stereo::shared_ptr K(new Cal3_S2Stereo(1, 1, 0, 0, 0, 0.1));
+        SmartStereoFactor::shared_ptr smartfactor(new SmartStereoFactor(measurementNoise));
+        measurement_smart_lookup_stereo[measurement.first] = smartfactor;
+
 
         // Next lets add all LEFT factors (all graphs have the same measurements!!!)
         for(size_t j=0; j<measurementMODEL1.second.leftuv.size(); j++) {
@@ -214,19 +223,21 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL1->add(factor);
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
+            //std::cout << "left: "<< measurementMODEL1.second.leftstateids.at(j) << " ";
             
             // Insert measurements to a smart factor
-            smartfactor_left->add(Point2(measurementMODEL1.second.leftuv.at(j)), Y(measurementMODEL1.second.leftstateids.at(j)));
+            //smartfactor_left->add(Point2(measurementMODEL1.second.leftuv.at(j)), Y(measurementMODEL1.second.leftstateids.at(j)));
         }
+        //std::cout << std::endl;
 
         // Add smart factor to FORSTER2 model
-        graphFORSTER2->push_back(smartfactor_left);
-        graph_newFORSTER2->push_back(smartfactor_left);
+        //graphFORSTER2->push_back(smartfactor_left);
+        //graph_newFORSTER2->push_back(smartfactor_left);
 
         // create a smart factor for the new feature
-        Pose3 sensor_P_body = Pose3(Rot3(config->R_C1toI), Point3(config->p_IinC1));
-        SmartFactor::shared_ptr smartfactor_right(new SmartFactor(measurementNoise, K, sensor_P_body.inverse()));
-        measurement_smart_lookup_right[measurement.first] = smartfactor_right;
+        //Pose3 sensor_P_body = Pose3(Rot3(config->R_C1toI), Point3(config->p_IinC1));
+        //SmartFactor::shared_ptr smartfactor_right(new SmartFactor(measurementNoise, K, sensor_P_body.inverse()));
+        //measurement_smart_lookup_right[measurement.first] = smartfactor_right;
         
         // Next lets add all RIGHT factors (all graphs have the same measurements!!!)
         for(size_t j=0; j<measurementMODEL1.second.rightuv.size(); j++) {
@@ -238,14 +249,26 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
             graph_newMODEL1->add(factor);
             graph_newMODEL2->add(factor);
             graph_newFORSTER->add(factor);
+            //std::cout << "right: " << measurementMODEL1.second.rightstateids.at(j) << " ";
 
             // Insert measurements to a smart factor
-            smartfactor_right->add(Point2(measurementMODEL1.second.rightuv.at(j)), Y(measurementMODEL1.second.rightstateids.at(j)));
+            //smartfactor_right->add(Point2(measurementMODEL1.second.rightuv.at(j)), Y(measurementMODEL1.second.rightstateids.at(j)));
+            auto pos = std::find(measurementMODEL1.second.leftstateids.begin(), measurementMODEL1.second.leftstateids.end(), measurementMODEL1.second.rightstateids.at(j));
+            if (pos != measurementMODEL1.second.leftstateids.end()) {
+              //smartfactor->add(StereoPoint2())
+              //std::cout<< " left meas: " << measurementMODEL1.second.leftstateids.at(pos-measurementMODEL1.second.leftstateids.begin()) << " " << measurementMODEL1.second.leftuv.at(pos-measurementMODEL1.second.leftstateids.begin()) << std::endl;
+              //std::cout<< "right meas: " << measurementMODEL1.second.rightstateids.at(j) << " " << measurementMODEL1.second.rightuv.at(j) << std::endl;
+              smartfactor->add(StereoPoint2(measurementMODEL1.second.leftuv.at(pos-measurementMODEL1.second.leftstateids.begin())[0], measurementMODEL1.second.rightuv.at(j)[0], measurementMODEL1.second.rightuv.at(j)[1]), Y(measurementMODEL1.second.rightstateids.at(j)), K);
+              //smartfactor->print();
+              //std::cout << smartfactor->isValid() << std::endl;
+            }
+        
         }
+        //std::cout << std::endl;
 
         // Add smart factor to FORSTER2 model
-        graphFORSTER2->push_back(smartfactor_left);
-        graph_newFORSTER2->push_back(smartfactor_left);
+        //graphFORSTER2->push_back(smartfactor);
+        //graph_newFORSTER2->push_back(smartfactor);
 
         // Record our success
         ct_successes++;

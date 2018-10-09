@@ -11,7 +11,7 @@
     <node name="cpi_compare" pkg="cpi_compare" type="estimator" output="screen" clear_params="true" required="true">
 
         <!-- simulation parameters -->
-        <param name="simPath"      type="string" value="$(find cpi_compare)/../../../cpi_simulation/GAZEBO_FREQ_100/rawdata_01/" />
+        <param name="simPath"      type="string" value="$(find cpi_compare)/../../../cpi_simulation/GAZEBO_FREQ_100/rawdata_18/" />
         <param name="useSerialSIM" type="bool"   value="true" />
         <rosparam param="gravity">[0.0,0.0,9.8]</rosparam>
 
