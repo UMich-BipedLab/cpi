@@ -42,7 +42,7 @@
 
         <!-- config flags -->
         <param name="useGroundTruthInit"          type="bool"   value="true" />
-        <param name="useGroundTruthInitValues"    type="bool"   value="false" />
+        <param name="useGroundTruthInitValues"    type="bool"   value="true" />
         <param name="useInverseDepth"             type="bool"   value="false" />
 
         <!-- numerical parameters -->

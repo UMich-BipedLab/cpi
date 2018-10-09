@@ -162,6 +162,10 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
 	      gtsam::Pose3 newposeFORSTER2 = newstateFORSTER2.pose();
 
 
+        // Add prior on new pose
+        Vector6 sigmas;
+        sigmas << Vector3::Constant(0.3), Vector3::Constant(0.1);
+
         //==========================================================================
         // Ground Truth Initialization
         //==========================================================================
@@ -169,6 +173,7 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         // If we have ground truth (like from simulation, then use that)
         // NOTE: We use ground truth poses to set initial values
         if(!true_times.empty() && config->useGroundTruthInitValues) {
+        //if (!true_times.empty() && ct_state == 1) {
           JPLQuaternion q_GtoI = true_qGtoI.at(true_qGtoI.size()-1);
           Vector3 p_IinG = true_pIinG.at(true_pIinG.size()-1);
           Bias3 ba = Bias3(0.002899, 0.000054, -0.000197);
@@ -187,7 +192,12 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
           //newstateFORSTER.set_ba(ba);
           //newstateFORSTER.set_bg(bg);
           newposeFORSTER2 = gtsam::Pose3(gtsam::Quaternion(q_GtoI(3), q_GtoI(0), q_GtoI(1), q_GtoI(2)), gtsam::Point3(p_IinG));
+          sigmas << Vector3::Constant(0.03), Vector3::Constant(0.01);
+          //std::cout << "Anchor the 2nd Node !!!" << std::endl;
         }
+
+        auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+        graph_newFORSTER2->emplace_shared<PriorFactor<Pose3>>(Y(ct_state), newposeFORSTER2, noise);
 
         // Debug print
         /*cout << "=======================================================" << endl;
@@ -218,12 +228,6 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         values_initialFORSTER2.insert(Y(ct_state), newposeFORSTER2);
         values_initialFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
         values_initialFORSTER2.insert(B(ct_state), newbiasFORSTER2);
-
-        // Add prior on new pose
-        Vector6 sigmas;
-        sigmas << Vector3::Constant(0.03), Vector3::Constant(0.01);
-        auto noise = noiseModel::Diagonal::Sigmas(sigmas);
-        graph_newFORSTER2->emplace_shared<PriorFactor<Pose3>>(Y(ct_state), newposeFORSTER2, noise);
 
         // Append to our fix lag smoother timestamps
         newTimestampsMODEL1[X(ct_state)] = timestamp;
@@ -405,7 +409,7 @@ void GraphSolver::optimizeISAM2() {
     boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
 
     // Perform smoothing update
-    try {
+    /*try {
         isam2MODEL1->update(*graph_newMODEL1, values_newMODEL1);
         isam2MODEL1->update();
         isam2MODEL1->update();
@@ -438,7 +442,7 @@ void GraphSolver::optimizeISAM2() {
         ROS_ERROR("FORSTER gtsam indeterminate linear system exception!");
         cerr << e.what() << endl;
         exit(EXIT_FAILURE);
-    }
+    }*/
     
     // Perform smoothing update
     try {
