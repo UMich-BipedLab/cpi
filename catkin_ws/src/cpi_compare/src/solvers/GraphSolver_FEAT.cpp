@@ -187,7 +187,6 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         values_newMODEL1.insert(F(ct_features), gtsam::Point3(measurementMODEL1.second.pos_FinG));
         values_newMODEL2.insert(F(ct_features), gtsam::Point3(measurementMODEL2.second.pos_FinG));
         values_newFORSTER.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
-        values_newFORSTER2.insert(F(ct_features), gtsam::Point3(measurementFORSTER2.second.pos_FinG));
         values_initialMODEL1.insert(F(ct_features), gtsam::Point3(measurementMODEL1.second.pos_FinG));
         values_initialMODEL2.insert(F(ct_features), gtsam::Point3(measurementMODEL2.second.pos_FinG));
         values_initialFORSTER.insert(F(ct_features), gtsam::Point3(measurementFORSTER.second.pos_FinG));
@@ -244,8 +243,8 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         }
 
         // Add smart factor to FORSTER2 model
-        graphFORSTER2->push_back(smartfactor_left);
-        graph_newFORSTER2->push_back(smartfactor_left);
+        //graphFORSTER2->push_back(smartfactor_right);
+        //graph_newFORSTER2->push_back(smartfactor_right);
 
         // Record our success
         ct_successes++;
