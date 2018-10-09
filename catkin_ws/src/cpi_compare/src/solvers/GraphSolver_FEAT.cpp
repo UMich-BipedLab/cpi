@@ -243,8 +243,8 @@ void GraphSolver::process_feat_normal(double timestamp, std::vector<uint> leftid
         }
 
         // Add smart factor to FORSTER2 model
-        //graphFORSTER2->push_back(smartfactor_right);
-        //graph_newFORSTER2->push_back(smartfactor_right);
+        graphFORSTER2->push_back(smartfactor_right);
+        graph_newFORSTER2->push_back(smartfactor_right);
 
         // Record our success
         ct_successes++;

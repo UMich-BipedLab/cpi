@@ -391,8 +391,8 @@ void handle_measurement_uv(cpi_comm::CameraMeasurement::Ptr msg) {
     //==========================================================================
 
     // Optimize the graph! GO GO GO!!!
-    //graphsolver->optimizeISAM2();
-    graphsolver->optimizeLM();
+    graphsolver->optimizeISAM2();
+    //graphsolver->optimizeLM();
 
 
     //==========================================================================

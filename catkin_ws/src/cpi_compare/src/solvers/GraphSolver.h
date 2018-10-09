@@ -109,11 +109,20 @@ public:
         this->smootherBatchFORSTER2 = new BatchFixedLagSmoother(config->lagSmootherAmount,params,true);
 
         // ISAM2 solver
-        ISAM2Params isam_params;
+        /*ISAM2Params isam_params;
         isam_params.optimizationParams = ISAM2DoglegParams();
         isam_params.factorization = ISAM2Params::QR;
         isam_params.relinearizeSkip = 1;
+        isam_params.relinearizeThreshold = 0.01;*/
+
+
+        ISAM2Params isam_params;
         isam_params.relinearizeThreshold = 0.01;
+        isam_params.relinearizeSkip = 1;
+        isam_params.cacheLinearizedFactors = false;
+        isam_params.enableDetailedResults = true;
+        isam_params.print();
+        //ISAM2 isam(parameters);
      
         this->isam2MODEL1 = new ISAM2(isam_params);
         this->isam2MODEL2 = new ISAM2(isam_params);

@@ -219,12 +219,17 @@ void GraphSolver::addmeasurement_uv(double timestamp, std::vector<uint> leftids,
         values_initialFORSTER2.insert(V(ct_state), newstateFORSTER2.v());
         values_initialFORSTER2.insert(B(ct_state), newbiasFORSTER2);
 
+        // Add prior on new pose
+        Vector6 sigmas;
+        sigmas << Vector3::Constant(0.03), Vector3::Constant(0.01);
+        auto noise = noiseModel::Diagonal::Sigmas(sigmas);
+        graph_newFORSTER2->emplace_shared<PriorFactor<Pose3>>(Y(ct_state), newposeFORSTER2, noise);
+
         // Append to our fix lag smoother timestamps
         newTimestampsMODEL1[X(ct_state)] = timestamp;
         newTimestampsMODEL2[X(ct_state)] = timestamp;
         newTimestampsFORSTER[X(ct_state)] = timestamp;
         newTimestampsFORSTER2[Y(ct_state)] = timestamp;
-
     }
 
     // Assert our vectors are equal (note will need to remove top one eventually)
@@ -359,9 +364,8 @@ void GraphSolver::optimizeLM() {
     }
 
     // Perform smoothing update
-    for (auto it : measurement_smart_lookup_left) {
-      std::cout << it.second->isValid() << std::endl;
-    }
+    //for (auto it : measurement_smart_lookup_left)
+      //std::cout << it.second->isValid() << std::endl;
     try {
       cout << "initial error = " << graphFORSTER->error(values_initialFORSTER) << endl;
       LevenbergMarquardtOptimizer optimizer(*graphFORSTER, values_initialFORSTER);
@@ -401,7 +405,7 @@ void GraphSolver::optimizeISAM2() {
     boost::posix_time::ptime t1(boost::posix_time::microsec_clock::local_time());
 
     // Perform smoothing update
-    /*try {
+    try {
         isam2MODEL1->update(*graph_newMODEL1, values_newMODEL1);
         isam2MODEL1->update();
         isam2MODEL1->update();
@@ -434,15 +438,31 @@ void GraphSolver::optimizeISAM2() {
         ROS_ERROR("FORSTER gtsam indeterminate linear system exception!");
         cerr << e.what() << endl;
         exit(EXIT_FAILURE);
-    }*/
+    }
     
     // Perform smoothing update
     try {
       cout << "initial error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
-      isam2FORSTER2->update(*graph_newFORSTER2, values_newFORSTER2);
-        isam2FORSTER2->update();
-        //isam2FORSTER2->update();
-        values_initialFORSTER2 = isam2FORSTER2->calculateEstimate();
+      ISAM2Result result = isam2FORSTER2->update(*graph_newFORSTER2, values_newFORSTER2);
+      //result.print();
+      
+      /*cout << "Detailed results:" << endl;
+      for (auto keyedStatus : result.detail->variableStatus) {
+        const auto& status = keyedStatus.second;
+        PrintKey(keyedStatus.first);
+        cout << " {" << endl;
+        cout << "reeliminated: " << status.isReeliminated << endl;
+        cout << "relinearized above thresh: " << status.isAboveRelinThreshold
+             << endl;
+        cout << "relinearized involved: " << status.isRelinearizeInvolved << endl;
+        cout << "relinearized: " << status.isRelinearized << endl;
+        cout << "observed: " << status.isObserved << endl;
+        cout << "new: " << status.isNew << endl;
+        cout << "in the root clique: " << status.inRootClique << endl;
+        cout << "}" << endl;
+      }*/
+        
+      values_initialFORSTER2 = isam2FORSTER2->calculateEstimate();
       cout << "final error = " << graphFORSTER2->error(values_initialFORSTER2) << endl;
     } catch(gtsam::IndeterminantLinearSystemException &e) {
         ROS_ERROR("FORSTER2 gtsam indeterminate linear system exception!");
@@ -571,7 +591,7 @@ void GraphSolver::trytoinitalize(double timestamp) {
     gtsam::Pose3 prior_pose = gtsam::Pose3(gtsam::Quaternion(q_GtoI(3), q_GtoI(0), q_GtoI(1), q_GtoI(2)), gtsam::Point3(p_IinG));
     imuBias::ConstantBias prior_imu_bias;
     
-    noiseModel::Diagonal::shared_ptr pose_noise_model = noiseModel::Diagonal::Sigmas((Vector(6) << 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1).finished());
+    noiseModel::Diagonal::shared_ptr pose_noise_model = noiseModel::Diagonal::Sigmas((Vector(6) << 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4).finished());
     noiseModel::Diagonal::shared_ptr velocity_noise_model = noiseModel::Isotropic::Sigma(3, 1e-2);
     noiseModel::Diagonal::shared_ptr bias_noise_model = noiseModel::Isotropic::Sigma(6, config->sigma_wa);
 
@@ -595,7 +615,6 @@ void GraphSolver::trytoinitalize(double timestamp) {
     values_newFORSTER2.insert(Y(ct_state), prior_pose);
     values_newFORSTER2.insert(V(ct_state), v_IinG);
     values_newFORSTER2.insert(B(ct_state), prior_imu_bias);
-    
     values_initialFORSTER2.insert(Y(ct_state), prior_pose);
     values_initialFORSTER2.insert(V(ct_state), v_IinG);
     values_initialFORSTER2.insert(B(ct_state), prior_imu_bias);
